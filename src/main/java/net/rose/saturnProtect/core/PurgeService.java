@@ -2,8 +2,13 @@ package net.rose.saturnProtect.core;
 
 import net.rose.saturnProtect.SaturnProtect;
 import net.rose.saturnProtect.db.Database;
+import net.rose.saturnProtect.ui.Dialogs;
 import net.rose.saturnProtect.util.Messages;
+import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+
+import java.util.List;
 
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +48,14 @@ public final class PurgeService {
             }
             if (counts.total() == 0L) {
                 sender.sendMessage(Messages.info("Nothing is old enough to purge."));
+                return;
+            }
+            if (sender instanceof Player player) {
+                // a confirmation dialog for players; the command runs as them, so permissions are checked again
+                Bukkit.getScheduler().runTask(plugin, () -> Dialogs.confirm(plugin, player, "Purge old records?",
+                        List.of("This deletes " + describe(counts) + ".",
+                                "Deleted records can no longer be rolled back."),
+                        () -> player.performCommand(rerun.startsWith("/") ? rerun.substring(1) : rerun)));
                 return;
             }
             sender.sendMessage(Messages.header("Purge"));
