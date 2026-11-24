@@ -1,0 +1,9 @@
+name: SaturnProtect
+version: '${version}'
+
+main: net.rose.saturnProtect.SaturnProtect
+paper-plugin-loader: net.rose.saturnProtect.SaturnProtectLoader
+api-version: '26.3'
+load: POSTWORLD
+
+authors: [ PumpkinDev ]

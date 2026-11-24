@@ -1,0 +1,47 @@
+# SaturnProtect configuration
+
+database:
+  # SQLite file, relative to the plugin folder
+  file: data.db
+
+writer:
+  # How often queued log entries are flushed to disk (milliseconds)
+  flush-interval-ms: 1000
+  # Max rows per insert batch
+  batch-size: 500
+
+inspector:
+  # Max history lines shown when inspecting a block
+  max-results: 10
+
+lookup:
+  # Lines per page
+  page-size: 10
+  # Radius used by /sp lookup when r: is not given (players only)
+  default-radius: 10
+  # Radius used by /sp near
+  near-radius: 5
+  # Largest radius allowed (use r:global to search everywhere)
+  max-radius: 100
+
+rollback:
+  # Refuse rollbacks that match more records than this
+  max-records: 250000
+  # Blocks changed per server tick while rolling back (lower = less lag)
+  blocks-per-tick: 500
+
+logging:
+  block-break: true
+  block-place: true
+  buckets: true
+  # Net item changes inside chests, barrels, hoppers, furnaces... per open/close
+  containers: true
+  item-drops: true
+  # Can be noisy on busy servers
+  item-pickups: false
+
+ignore:
+  # Worlds that are never logged (case-insensitive)
+  worlds: []
+  # Players that are never logged (case-insensitive)
+  users: []
