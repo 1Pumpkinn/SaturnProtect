@@ -64,6 +64,11 @@ public final class ProtectConfig {
         return Math.max(1, config.getInt("lookup.page-size", 10));
     }
 
+    /** Show lookup results to players as a paged dialog instead of chat lines. The console always gets chat. */
+    public boolean dialogLogs() {
+        return config.getBoolean("ui.dialog-logs", true);
+    }
+
     public int defaultRadius() {
         return Math.max(1, config.getInt("lookup.default-radius", 10));
     }

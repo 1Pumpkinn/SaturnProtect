@@ -14,8 +14,13 @@ inspector:
   # Max history lines shown when inspecting a block
   max-results: 10
 
+ui:
+  # Show /sp lookup, items and events results to players as a pop-up dialog (with Prev/Next buttons and an
+  # "In chat" button). Dialogs block movement while open, so set this to false to always use chat lines.
+  dialog-logs: true
+
 lookup:
-  # Lines per page
+  # Lines per page (a dialog scrolls, so keep this at 10 or less if players use dialogs)
   page-size: 10
   # Radius used by /sp lookup when r: is not given (players only)
   default-radius: 10
