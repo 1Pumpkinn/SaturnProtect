@@ -1,5 +1,6 @@
 package net.rose.saturnProtect.config;
 
+import net.rose.saturnProtect.util.TimeParser;
 import org.bukkit.configuration.file.FileConfiguration;
 
 import java.util.List;
@@ -7,18 +8,34 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Typed view over config.yml. Can be reloaded in place with {@link #reload(FileConfiguration)}, so everything
+ * that holds a reference to it sees new values without being rebuilt. Fields are volatile because the
+ * database thread and the main thread both read them.
+ */
 public final class ProtectConfig {
 
-    private final FileConfiguration config;
-    private final Set<String> ignoredWorlds;
-    private final Set<String> ignoredUsers;
-    private final Set<String> ignoredCommands;
+    private static final long DEFAULT_PURGE_MIN_AGE = 86_400_000L;
+
+    private volatile FileConfiguration config;
+    private volatile Set<String> ignoredWorlds;
+    private volatile Set<String> ignoredUsers;
+    private volatile Set<String> ignoredCommands;
 
     public ProtectConfig(FileConfiguration config) {
-        this.config = config;
-        this.ignoredWorlds = lower(config.getStringList("ignore.worlds"));
-        this.ignoredUsers = lower(config.getStringList("ignore.users"));
-        this.ignoredCommands = lower(config.getStringList("logging.ignored-commands"));
+        load(config);
+    }
+
+    /** Swaps in freshly loaded configuration. */
+    public void reload(FileConfiguration fresh) {
+        load(fresh);
+    }
+
+    private void load(FileConfiguration source) {
+        this.ignoredWorlds = lower(source.getStringList("ignore.worlds"));
+        this.ignoredUsers = lower(source.getStringList("ignore.users"));
+        this.ignoredCommands = lower(source.getStringList("logging.ignored-commands"));
+        this.config = source;
     }
 
     private static Set<String> lower(List<String> input) {
@@ -137,6 +154,31 @@ public final class ProtectConfig {
 
     public boolean logTreeGrowth() {
         return config.getBoolean("logging.tree-growth", true);
+    }
+
+    public boolean logPistons() {
+        return config.getBoolean("logging.pistons", true);
+    }
+
+    public boolean logEntityBlockChanges() {
+        return config.getBoolean("logging.entity-block-changes", true);
+    }
+
+    public boolean logItemFrames() {
+        return config.getBoolean("logging.item-frames", true);
+    }
+
+    public boolean logArmorStands() {
+        return config.getBoolean("logging.armor-stands", true);
+    }
+
+    /** Newest data {@code /sp purge} is allowed to delete, as an age. Falls back to 24 hours if unreadable. */
+    public long purgeMinAgeMillis() {
+        try {
+            return TimeParser.parseMillis(config.getString("purge.minimum-age", "24h"));
+        } catch (IllegalArgumentException ex) {
+            return DEFAULT_PURGE_MIN_AGE;
+        }
     }
 
     public int lavaAttributionRadius() {

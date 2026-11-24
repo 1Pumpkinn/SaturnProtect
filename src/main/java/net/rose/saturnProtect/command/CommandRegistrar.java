@@ -32,6 +32,8 @@ public final class CommandRegistrar {
         subs.add(new RollbackCommand(plugin.protectConfig(), plugin.rollbacks(),
                 "restore", "rs", "Re-apply rolled back changes (needs t:)", true));
         subs.add(new UndoCommand(plugin.rollbacks()));
+        subs.add(new PurgeCommand(plugin.protectConfig(), plugin.purges(), plugin.rollbacks()));
+        subs.add(new ReloadCommand(plugin));
 
         plugin.getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event -> {
             LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("saturnprotect")

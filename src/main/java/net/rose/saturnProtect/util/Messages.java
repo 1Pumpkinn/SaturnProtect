@@ -125,7 +125,8 @@ public final class Messages {
         String what = switch (record.action()) {
             case LOGIN, LOGOUT -> record.action().verb();
             case CHAT, SIGN -> record.action().verb() + ": " + subject;
-            case COMMAND, KILL -> record.action().verb() + " " + subject;
+            case COMMAND, KILL, ENTITY_PLACE, ENTITY_BREAK -> record.action().verb() + " " + subject;
+            case ENTITY_ITEM -> subject;
         };
 
         Component hover = Component.text(TimeFormat.absolute(record.time()) + " - " + record.world(), NamedTextColor.GRAY);

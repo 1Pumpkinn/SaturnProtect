@@ -29,6 +29,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
@@ -41,6 +42,8 @@ import java.util.logging.Level;
 public final class Database {
 
     private static final int MAX_PER_FLUSH = 20_000;
+    private static final int PURGE_CHUNK = 20_000;
+    private static final String[] PURGE_TABLES = {"sp_block", "sp_item", "sp_event"};
 
     private static final String INSERT_BLOCK = """
             INSERT INTO sp_block (time, actor, actor_uuid, world, x, y, z, action, old_data, new_data, rolled_back)
@@ -69,6 +72,14 @@ public final class Database {
     public record Stats(long blockRows, long itemRows, long eventRows, int queued, long fileBytes) {
     }
 
+    /** Row counts per table, used for what a purge would delete or did delete. */
+    public record Purged(long blocks, long items, long events) {
+
+        public long total() {
+            return blocks + items + events;
+        }
+    }
+
     private final SaturnProtect plugin;
     private final ProtectConfig config;
     private final Path file;
@@ -77,6 +88,7 @@ public final class Database {
     private final ConcurrentLinkedQueue<EventRecord> pendingEvents = new ConcurrentLinkedQueue<>();
     private final ScheduledThreadPoolExecutor worker;
     private Connection connection;
+    private ScheduledFuture<?> flushTask;
 
     public Database(SaturnProtect plugin, ProtectConfig config) {
         this.plugin = plugin;
@@ -154,8 +166,23 @@ public final class Database {
             statement.execute("CREATE INDEX IF NOT EXISTS idx_sp_block_actor ON sp_block (actor, time)");
         }
 
+        scheduleFlush();
+    }
+
+    /** Applies a changed {@code writer.flush-interval-ms}. Call after the config was reloaded. */
+    public void reloadSettings() {
+        scheduleFlush();
+    }
+
+    private synchronized void scheduleFlush() {
+        if (worker.isShutdown()) {
+            return;
+        }
+        if (flushTask != null) {
+            flushTask.cancel(false);
+        }
         long interval = config.flushIntervalMs();
-        worker.scheduleWithFixedDelay(this::flushSafely, interval, interval, TimeUnit.MILLISECONDS);
+        flushTask = worker.scheduleWithFixedDelay(this::flushSafely, interval, interval, TimeUnit.MILLISECONDS);
     }
 
     /** Queue a block record; it is written asynchronously. Safe to call from any thread. */
@@ -356,6 +383,10 @@ public final class Database {
                         + " AND action = " + EventAction.KILL.id());
                 params.addAll(where.params());
             }
+            if (parts.isEmpty()) {
+                // only actions that live in other tables were asked for, e.g. a:entity-place
+                return new LookupResult(0L, List.of());
+            }
             String union = String.join(" UNION ALL ", parts);
 
             try {
@@ -511,6 +542,77 @@ public final class Database {
                 } catch (SQLException ignored) {
                     // nothing more we can do
                 }
+            }
+        }, worker);
+    }
+
+    /** How many rows older than {@code beforeMillis} a purge would delete. */
+    public CompletableFuture<Purged> countOlderThan(long beforeMillis) {
+        return CompletableFuture.supplyAsync(() -> {
+            long[] counts = new long[PURGE_TABLES.length];
+            try {
+                for (int i = 0; i < PURGE_TABLES.length; i++) {
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            "SELECT COUNT(*) FROM " + PURGE_TABLES[i] + " WHERE time < ?")) {
+                        statement.setLong(1, beforeMillis);
+                        try (ResultSet rs = statement.executeQuery()) {
+                            counts[i] = rs.next() ? rs.getLong(1) : 0L;
+                        }
+                    }
+                }
+            } catch (SQLException ex) {
+                throw new CompletionException(ex);
+            }
+            return new Purged(counts[0], counts[1], counts[2]);
+        }, worker);
+    }
+
+    /**
+     * Deletes every row older than {@code beforeMillis}. Works in chunks, and each chunk is its own task on the
+     * database thread, so queued writes and lookups get a turn between chunks instead of waiting for the whole purge.
+     */
+    public CompletableFuture<Purged> purge(long beforeMillis) {
+        return purgeNext(beforeMillis, new long[PURGE_TABLES.length]);
+    }
+
+    private CompletableFuture<Purged> purgeNext(long beforeMillis, long[] totals) {
+        return CompletableFuture.supplyAsync(() -> {
+            long deleted = 0L;
+            try {
+                for (int i = 0; i < PURGE_TABLES.length; i++) {
+                    String table = PURGE_TABLES[i];
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            "DELETE FROM " + table + " WHERE id IN (SELECT id FROM " + table
+                                    + " WHERE time < ? LIMIT ?)")) {
+                        statement.setLong(1, beforeMillis);
+                        statement.setInt(2, PURGE_CHUNK);
+                        int removed = statement.executeUpdate();
+                        totals[i] += removed;
+                        deleted += removed;
+                    }
+                }
+            } catch (SQLException ex) {
+                throw new CompletionException(ex);
+            }
+            return deleted;
+        }, worker).thenCompose(deleted -> deleted > 0L
+                ? purgeNext(beforeMillis, totals)
+                : CompletableFuture.completedFuture(new Purged(totals[0], totals[1], totals[2])));
+    }
+
+    /**
+     * Shrinks the write-ahead log, and with {@code vacuum} also rewrites the database file so deleted rows give
+     * their disk space back. VACUUM needs free disk space about the size of the database and can take a while.
+     */
+    public CompletableFuture<Void> compact(boolean vacuum) {
+        return CompletableFuture.runAsync(() -> {
+            try (Statement statement = connection.createStatement()) {
+                if (vacuum) {
+                    statement.execute("VACUUM");
+                }
+                statement.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+            } catch (SQLException ex) {
+                throw new CompletionException(ex);
             }
         }, worker);
     }

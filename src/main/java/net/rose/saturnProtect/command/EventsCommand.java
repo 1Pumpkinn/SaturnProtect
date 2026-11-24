@@ -27,12 +27,12 @@ public final class EventsCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "events | ev <u:user t:time r:radius a:login|logout|chat|command|kill|sign b:victim m:text>";
+        return "events | ev <u:user t:time r:radius a:login|logout|chat|command|kill|sign|entity-place|entity-break|entity-item b:victim|entity m:text>";
     }
 
     @Override
     public String description() {
-        return "Search sessions, chat, commands, kills and sign edits";
+        return "Search sessions, chat, commands, kills, signs, item frames and armor stands";
     }
 
     @Override

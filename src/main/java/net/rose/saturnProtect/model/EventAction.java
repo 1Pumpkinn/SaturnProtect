@@ -6,7 +6,13 @@ public enum EventAction {
     CHAT(2, "said", "chat"),
     COMMAND(3, "ran", "command"),
     KILL(4, "killed", "kill"),
-    SIGN(5, "edited a sign", "sign");
+    SIGN(5, "edited a sign", "sign"),
+    /** An item frame, glow item frame, painting or armor stand was placed. */
+    ENTITY_PLACE(6, "placed", "entity-place"),
+    /** An item frame, glow item frame, painting or armor stand was broken. */
+    ENTITY_BREAK(7, "broke", "entity-break"),
+    /** An item was put in or taken out of an item frame, or put on or taken off an armor stand. */
+    ENTITY_ITEM(8, "changed", "entity-item");
 
     private final int id;
     private final String verb;

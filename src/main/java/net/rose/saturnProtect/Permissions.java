@@ -12,6 +12,8 @@ public final class Permissions {
     public static final String STATUS = "saturnprotect.status";
     public static final String LOOKUP = "saturnprotect.lookup";
     public static final String ROLLBACK = "saturnprotect.rollback";
+    public static final String PURGE = "saturnprotect.purge";
+    public static final String RELOAD = "saturnprotect.reload";
 
     private Permissions() {
     }
@@ -23,6 +25,8 @@ public final class Permissions {
         add(manager, STATUS, "View SaturnProtect database status");
         add(manager, LOOKUP, "Search logged changes");
         add(manager, ROLLBACK, "Roll back, restore and undo changes");
+        add(manager, PURGE, "Delete old log records");
+        add(manager, RELOAD, "Reload config.yml");
     }
 
     private static void add(PluginManager manager, String node, String description) {

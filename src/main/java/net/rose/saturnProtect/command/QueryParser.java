@@ -137,7 +137,7 @@ public final class QueryParser {
             }
         }
         throw new IllegalArgumentException("Unknown action '" + name + "'. Valid: break, place, add, remove, drop, pickup, "
-                + "login, logout, chat, command, kill, sign");
+                + "login, logout, chat, command, kill, sign, entity-place, entity-break, entity-item");
     }
 
     private static List<String> split(String value) {

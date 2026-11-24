@@ -60,7 +60,7 @@ public final class LookupCommand implements SubCommand {
             }
             boolean otherEvents = query.eventActions().stream().anyMatch(action -> action != EventAction.KILL);
             if (otherEvents || query.text() != null) {
-                throw new IllegalArgumentException("login/logout/chat/command/sign are events, use /sp events for those.");
+                throw new IllegalArgumentException("login/logout/chat/command/sign/entity-* are events, use /sp events for those.");
             }
             lookups.run(sender, query);
             return Command.SINGLE_SUCCESS;

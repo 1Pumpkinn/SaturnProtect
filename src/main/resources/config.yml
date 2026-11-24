@@ -60,6 +60,16 @@ logging:
   fluid-flow: false
   # Trees and huge mushrooms growing, under the player who used bone meal if there was one
   tree-growth: true
+  # Blocks pushed, pulled or destroyed by pistons, logged under #piston. Busy flying machines and
+  # piston farms produce a lot of rows, turn this off if the database grows too fast.
+  pistons: true
+  # Endermen, withers, falling sand and gravel, sheep eating grass, trampled farmland, silverfish...
+  # logged under the player or #entity_type
+  entity-block-changes: true
+  # Item frames, glow item frames and paintings: placed, broken, and items put in or taken out
+  item-frames: true
+  # Armor stands: placed, broken, and equipment put on or taken off
+  armor-stands: true
   # A mob or player that dies in lava is blamed on the player who placed the nearest lava
   # within this radius and time window
   lava-attribution:
@@ -75,6 +85,10 @@ logging:
     - changepassword
     - sp
     - saturnprotect
+
+purge:
+  # /sp purge refuses to delete anything newer than this (w, d, h, m, s)
+  minimum-age: "24h"
 
 ignore:
   # Worlds that are never logged (case-insensitive)

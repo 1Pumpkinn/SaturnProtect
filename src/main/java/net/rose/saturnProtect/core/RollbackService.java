@@ -87,6 +87,11 @@ public final class RollbackService {
         this.database = database;
     }
 
+    /** True while a rollback, restore or undo is running. Only one can run at a time. */
+    public boolean isBusy() {
+        return busy.get();
+    }
+
     public void rollback(CommandSender sender, LookupQuery query) {
         start(sender, query, false);
     }
