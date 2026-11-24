@@ -55,6 +55,7 @@ public final class StatusCommand implements SubCommand {
             sender.sendMessage(Messages.header("Status"));
             sender.sendMessage(Messages.info("Block records: " + stats.blockRows()));
             sender.sendMessage(Messages.info("Item records: " + stats.itemRows()));
+            sender.sendMessage(Messages.info("Event records: " + stats.eventRows()));
             sender.sendMessage(Messages.info("Queued writes: " + stats.queued()));
             sender.sendMessage(Messages.info(String.format(Locale.ROOT, "Database size: %.2f MB",
                     stats.fileBytes() / 1_048_576.0)));

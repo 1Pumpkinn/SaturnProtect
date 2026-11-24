@@ -18,7 +18,11 @@ public final class LookupService {
 
     private static final UUID CONSOLE = new UUID(0L, 0L);
 
-    private record LastLookup(LookupQuery query, boolean items) {
+    private enum Kind {
+        BLOCKS, ITEMS, EVENTS
+    }
+
+    private record LastLookup(LookupQuery query, Kind kind) {
     }
 
     private final SaturnProtect plugin;
@@ -34,14 +38,20 @@ public final class LookupService {
 
     /** Block change lookup. */
     public void run(CommandSender sender, LookupQuery query) {
-        lastQueries.put(key(sender), new LastLookup(query, false));
-        show(sender, query, false, 1);
+        lastQueries.put(key(sender), new LastLookup(query, Kind.BLOCKS));
+        show(sender, query, Kind.BLOCKS, 1);
     }
 
     /** Container / drop / pickup lookup. */
     public void runItems(CommandSender sender, LookupQuery query) {
-        lastQueries.put(key(sender), new LastLookup(query, true));
-        show(sender, query, true, 1);
+        lastQueries.put(key(sender), new LastLookup(query, Kind.ITEMS));
+        show(sender, query, Kind.ITEMS, 1);
+    }
+
+    /** Session, chat, command, kill and sign lookup. */
+    public void runEvents(CommandSender sender, LookupQuery query) {
+        lastQueries.put(key(sender), new LastLookup(query, Kind.EVENTS));
+        show(sender, query, Kind.EVENTS, 1);
     }
 
     public void page(CommandSender sender, int page) {
@@ -50,18 +60,25 @@ public final class LookupService {
             sender.sendMessage(Messages.error("Run a lookup first, then use /sp page <number>."));
             return;
         }
-        show(sender, last.query(), last.items(), page);
+        show(sender, last.query(), last.kind(), page);
     }
 
     public void forget(UUID player) {
         lastQueries.remove(player);
     }
 
-    private void show(CommandSender sender, LookupQuery query, boolean items, int page) {
+    private void show(CommandSender sender, LookupQuery query, Kind kind, int page) {
         int pageSize = config.pageSize();
         int offset = (page - 1) * pageSize;
 
-        if (items) {
+        if (kind == Kind.EVENTS) {
+            database.lookupEvents(query, offset, pageSize).whenComplete((result, error) -> {
+                int pages = pagesOrReport(sender, error, result == null ? 0 : result.total(), page, pageSize);
+                if (pages > 0) {
+                    Messages.sendEventPage(sender, page, pages, result);
+                }
+            });
+        } else if (kind == Kind.ITEMS) {
             database.lookupItems(query, offset, pageSize).whenComplete((result, error) -> {
                 int pages = pagesOrReport(sender, error, result == null ? 0 : result.total(), page, pageSize);
                 if (pages > 0) {

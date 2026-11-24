@@ -4,7 +4,7 @@ import java.util.UUID;
 
 /**
  * One item movement. {@code itemData} is the item serialized with {@code ItemStack#serializeAsBytes}
- * (amount 1); it is only filled when writing, lookups leave it null.
+ * (amount 1); it is only filled when writing and when fetching for a rollback, lookups leave it null.
  */
 public record ItemRecord(
         long id,
@@ -18,12 +18,13 @@ public record ItemRecord(
         ItemAction action,
         String itemType,
         int amount,
-        byte[] itemData
+        byte[] itemData,
+        boolean rolledBack
 ) {
 
     public static ItemRecord create(String actor, UUID actorUuid, String world, int x, int y, int z,
                                     ItemAction action, String itemType, int amount, byte[] itemData) {
         return new ItemRecord(0L, System.currentTimeMillis(), actor, actorUuid, world, x, y, z,
-                action, itemType, amount, itemData);
+                action, itemType, amount, itemData, false);
     }
 }

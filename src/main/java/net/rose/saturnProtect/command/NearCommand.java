@@ -58,7 +58,7 @@ public final class NearCommand implements SubCommand {
             return 0;
         }
         LookupQuery.Area area = QueryParser.areaAround(sender, radius, config);
-        lookups.run(sender, new LookupQuery(List.of(), List.of(), List.of(), List.of(), List.of(),
+        lookups.run(sender, new LookupQuery(List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), null,
                 System.currentTimeMillis() - NEAR_WINDOW_MILLIS, area));
         return Command.SINGLE_SUCCESS;
     }

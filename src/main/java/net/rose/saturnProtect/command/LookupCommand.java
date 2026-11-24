@@ -9,6 +9,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import net.rose.saturnProtect.Permissions;
 import net.rose.saturnProtect.config.ProtectConfig;
 import net.rose.saturnProtect.core.LookupService;
+import net.rose.saturnProtect.model.EventAction;
 import net.rose.saturnProtect.model.LookupQuery;
 import net.rose.saturnProtect.util.Messages;
 import org.bukkit.command.CommandSender;
@@ -27,12 +28,12 @@ public final class LookupCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "lookup | l <u:user t:time r:radius a:action b:block e:exclude>";
+        return "lookup | l <u:user t:time r:radius a:break|place|kill b:block e:exclude>";
     }
 
     @Override
     public String description() {
-        return "Search logged changes (e.g. u:Steve t:2d r:10 a:break)";
+        return "Search block changes and kills (e.g. u:Steve t:2d r:10 a:break)";
     }
 
     @Override
@@ -56,6 +57,10 @@ public final class LookupCommand implements SubCommand {
             LookupQuery query = QueryParser.parse(sender, params, config);
             if (!query.itemActions().isEmpty()) {
                 throw new IllegalArgumentException("add/remove/drop/pickup are item actions, use /sp items for those.");
+            }
+            boolean otherEvents = query.eventActions().stream().anyMatch(action -> action != EventAction.KILL);
+            if (otherEvents || query.text() != null) {
+                throw new IllegalArgumentException("login/logout/chat/command/sign are events, use /sp events for those.");
             }
             lookups.run(sender, query);
             return Command.SINGLE_SUCCESS;

@@ -54,6 +54,9 @@ public final class ItemsCommand implements SubCommand {
             if (!query.actions().isEmpty()) {
                 throw new IllegalArgumentException("break/place are block actions, use /sp lookup for those.");
             }
+            if (!query.eventActions().isEmpty() || query.text() != null) {
+                throw new IllegalArgumentException("login/logout/chat/command/kill/sign are events, use /sp events for those.");
+            }
             lookups.runItems(sender, query);
             return Command.SINGLE_SUCCESS;
         } catch (IllegalArgumentException ex) {

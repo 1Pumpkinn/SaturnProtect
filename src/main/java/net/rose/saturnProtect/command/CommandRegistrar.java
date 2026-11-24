@@ -25,6 +25,7 @@ public final class CommandRegistrar {
         subs.add(new LookupCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new NearCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new ItemsCommand(plugin.protectConfig(), plugin.lookups()));
+        subs.add(new EventsCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new PageCommand(plugin.lookups()));
         subs.add(new RollbackCommand(plugin.protectConfig(), plugin.rollbacks(),
                 "rollback", "rb", "Roll back changes (needs t:, e.g. u:Steve t:2h)", false));

@@ -9,6 +9,7 @@ import io.papermc.paper.command.brigadier.Commands;
 import net.rose.saturnProtect.Permissions;
 import net.rose.saturnProtect.config.ProtectConfig;
 import net.rose.saturnProtect.core.RollbackService;
+import net.rose.saturnProtect.model.ItemAction;
 import net.rose.saturnProtect.model.LookupQuery;
 import net.rose.saturnProtect.util.Messages;
 import org.bukkit.command.CommandSender;
@@ -37,7 +38,7 @@ public final class RollbackCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return name + " | " + alias + " <t:time + filters>";
+        return name + " | " + alias + " <t:time + filters> (blocks and containers)";
     }
 
     @Override
@@ -64,8 +65,13 @@ public final class RollbackCommand implements SubCommand {
         String params = StringArgumentType.getString(context, "params");
         try {
             LookupQuery query = QueryParser.parse(sender, params, config, true);
-            if (!query.itemActions().isEmpty()) {
-                throw new IllegalArgumentException("Only block changes can be rolled back (a:break / a:place).");
+            if (!query.eventActions().isEmpty() || query.text() != null) {
+                throw new IllegalArgumentException("Only blocks and container contents can be rolled back.");
+            }
+            for (ItemAction action : query.itemActions()) {
+                if (action != ItemAction.CONTAINER_ADD && action != ItemAction.CONTAINER_REMOVE) {
+                    throw new IllegalArgumentException("Drops and pickups can't be rolled back. Valid actions: break, place, add, remove.");
+                }
             }
             if (restore) {
                 service.restore(sender, query);

@@ -19,7 +19,7 @@ public record BlockRecord(
         String oldData,
         String newData,
         boolean rolledBack
-) {
+) implements LookupEntry {
 
     public static BlockRecord create(String actor, UUID actorUuid, String world, int x, int y, int z,
                                      LogAction action, String oldData, String newData) {

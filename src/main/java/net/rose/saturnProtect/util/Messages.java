@@ -7,7 +7,11 @@ import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.rose.saturnProtect.model.BlockRecord;
+import net.rose.saturnProtect.model.EventAction;
+import net.rose.saturnProtect.model.EventLookupResult;
+import net.rose.saturnProtect.model.EventRecord;
 import net.rose.saturnProtect.model.ItemLookupResult;
+import net.rose.saturnProtect.model.LookupEntry;
 import net.rose.saturnProtect.model.ItemRecord;
 import net.rose.saturnProtect.model.LookupResult;
 
@@ -63,8 +67,12 @@ public final class Messages {
     public static void sendLookupPage(Audience audience, int page, int pages, LookupResult result) {
         audience.sendMessage(header("Lookup - " + result.total() + " result(s)"));
         long now = System.currentTimeMillis();
-        for (BlockRecord record : result.records()) {
-            audience.sendMessage(lookupLine(now, record));
+        for (LookupEntry entry : result.records()) {
+            if (entry instanceof BlockRecord block) {
+                audience.sendMessage(lookupLine(now, block));
+            } else if (entry instanceof EventRecord event) {
+                audience.sendMessage(eventLine(now, event));
+            }
         }
 
         audience.sendMessage(pageFooter(page, pages));
@@ -75,6 +83,15 @@ public final class Messages {
         long now = System.currentTimeMillis();
         for (ItemRecord record : result.records()) {
             audience.sendMessage(itemLine(now, record, true));
+        }
+        audience.sendMessage(pageFooter(page, pages));
+    }
+
+    public static void sendEventPage(Audience audience, int page, int pages, EventLookupResult result) {
+        audience.sendMessage(header("Events - " + result.total() + " result(s)"));
+        long now = System.currentTimeMillis();
+        for (EventRecord record : result.records()) {
+            audience.sendMessage(eventLine(now, record));
         }
         audience.sendMessage(pageFooter(page, pages));
     }
@@ -103,6 +120,28 @@ public final class Messages {
         return prev.append(Component.text("Page " + page + "/" + pages, NamedTextColor.GRAY)).append(next);
     }
 
+    private static Component eventLine(long now, EventRecord record) {
+        String subject = record.subject() == null ? "" : record.subject().replace("\n", " | ");
+        String what = switch (record.action()) {
+            case LOGIN, LOGOUT -> record.action().verb();
+            case CHAT, SIGN -> record.action().verb() + ": " + subject;
+            case COMMAND, KILL -> record.action().verb() + " " + subject;
+        };
+
+        Component hover = Component.text(TimeFormat.absolute(record.time()) + " - " + record.world(), NamedTextColor.GRAY);
+        if (record.action() == EventAction.SIGN
+                && record.detail() != null && !record.detail().isBlank()) {
+            hover = hover.append(Component.newline())
+                    .append(Component.text("Before: " + record.detail().replace("\n", " | "), NamedTextColor.GRAY));
+        }
+        return Component.text(TimeFormat.ago(now - record.time()) + " ago ", NamedTextColor.GRAY)
+                .append(Component.text("- ", NamedTextColor.DARK_GRAY))
+                .append(Component.text(record.actor(), NamedTextColor.WHITE))
+                .append(Component.text(" " + what + " ", NamedTextColor.GRAY))
+                .append(Component.text("(" + record.x() + "/" + record.y() + "/" + record.z() + ")", NamedTextColor.DARK_AQUA))
+                .hoverEvent(HoverEvent.showText(hover));
+    }
+
     private static Component itemLine(long now, ItemRecord record, boolean showCoords) {
         Component line = Component.text(TimeFormat.ago(now - record.time()) + " ago ", NamedTextColor.GRAY)
                 .append(Component.text("- ", NamedTextColor.DARK_GRAY))
@@ -112,8 +151,12 @@ public final class Messages {
         if (showCoords) {
             line = line.append(Component.text(" (" + record.x() + "/" + record.y() + "/" + record.z() + ")", NamedTextColor.DARK_AQUA));
         }
-        return line.hoverEvent(HoverEvent.showText(Component.text(
+        line = line.hoverEvent(HoverEvent.showText(Component.text(
                 TimeFormat.absolute(record.time()) + " - " + record.world(), NamedTextColor.GRAY)));
+        if (record.rolledBack()) {
+            line = line.decorate(TextDecoration.STRIKETHROUGH);
+        }
+        return line;
     }
 
     private static Component lookupLine(long now, BlockRecord record) {

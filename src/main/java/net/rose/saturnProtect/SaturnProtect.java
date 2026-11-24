@@ -8,9 +8,14 @@ import net.rose.saturnProtect.core.LookupService;
 import net.rose.saturnProtect.core.RollbackService;
 import net.rose.saturnProtect.db.Database;
 import net.rose.saturnProtect.listener.BlockListener;
+import net.rose.saturnProtect.listener.ChatListener;
 import net.rose.saturnProtect.listener.ContainerListener;
+import net.rose.saturnProtect.listener.EnvironmentListener;
 import net.rose.saturnProtect.listener.InspectListener;
 import net.rose.saturnProtect.listener.ItemListener;
+import net.rose.saturnProtect.listener.KillListener;
+import net.rose.saturnProtect.listener.SessionListener;
+import net.rose.saturnProtect.listener.SignListener;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -64,6 +69,11 @@ public final class SaturnProtect extends JavaPlugin {
         manager.registerEvents(new InspectListener(this, protectConfig, database, inspectors), this);
         manager.registerEvents(new ContainerListener(protectConfig, logService), this);
         manager.registerEvents(new ItemListener(protectConfig, logService), this);
+        manager.registerEvents(new SessionListener(protectConfig, logService), this);
+        manager.registerEvents(new ChatListener(protectConfig, logService), this);
+        manager.registerEvents(new KillListener(protectConfig, logService), this);
+        manager.registerEvents(new SignListener(protectConfig, logService), this);
+        manager.registerEvents(new EnvironmentListener(this, protectConfig, logService), this);
     }
 
     public ProtectConfig protectConfig() {

@@ -7,6 +7,8 @@ import net.rose.saturnProtect.model.LogAction;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Chest;
+import org.bukkit.block.Container;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.entity.Player;
@@ -18,6 +20,7 @@ import org.bukkit.event.block.BlockMultiPlaceEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.inventory.Inventory;
 
 public final class BlockListener implements Listener {
 
@@ -40,9 +43,19 @@ public final class BlockListener implements Listener {
             return;
         }
         Block block = event.getBlock();
+        logBrokenContainer(event.getPlayer(), block);
         BlockData data = block.getBlockData();
         String after = (data instanceof Waterlogged waterlogged && waterlogged.isWaterlogged()) ? WATER : AIR;
         logService.logPlayerBlock(event.getPlayer(), block, LogAction.BREAK, data.getAsString(), after);
+    }
+
+    /** Contents are still in the container at MONITOR, so log them as removed to make a rollback restore them. */
+    private void logBrokenContainer(Player player, Block block) {
+        if (!config.logContainers() || !(block.getState(false) instanceof Container container)) {
+            return;
+        }
+        Inventory inventory = container instanceof Chest chest ? chest.getBlockInventory() : container.getInventory();
+        logService.logContents(player, block, inventory.getContents());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

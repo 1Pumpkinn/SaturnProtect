@@ -1,6 +1,7 @@
 package net.rose.saturnProtect.command;
 
 import net.rose.saturnProtect.config.ProtectConfig;
+import net.rose.saturnProtect.model.EventAction;
 import net.rose.saturnProtect.model.ItemAction;
 import net.rose.saturnProtect.model.LogAction;
 import net.rose.saturnProtect.model.LookupQuery;
@@ -14,7 +15,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Parses CoreProtect-style parameters: {@code u:Name,Other t:3d r:10 a:break b:stone,dirt e:grass_block}.
+ * Parses CoreProtect-style parameters: {@code u:Name,Other t:3d r:10 a:break b:stone,dirt e:grass_block m:text}.
  */
 public final class QueryParser {
 
@@ -33,10 +34,12 @@ public final class QueryParser {
         List<String> users = new ArrayList<>();
         List<LogAction> actions = new ArrayList<>();
         List<ItemAction> itemActions = new ArrayList<>();
+        List<EventAction> eventActions = new ArrayList<>();
         List<String> include = new ArrayList<>();
         List<String> exclude = new ArrayList<>();
         String time = null;
         String radius = null;
+        String text = null;
 
         for (String token : input.trim().split("\\s+")) {
             if (token.isEmpty()) {
@@ -55,12 +58,13 @@ public final class QueryParser {
                 case "r", "radius" -> radius = value;
                 case "a", "action" -> {
                     for (String name : split(value)) {
-                        addAction(name, actions, itemActions);
+                        addAction(name, actions, itemActions, eventActions);
                     }
                 }
                 case "b", "include" -> include.addAll(normalizeBlocks(value));
                 case "e", "exclude" -> exclude.addAll(normalizeBlocks(value));
-                default -> throw new IllegalArgumentException("Unknown parameter '" + key + "'. Valid: u, t, r, a, b, e");
+                case "m", "msg", "text" -> text = value;
+                default -> throw new IllegalArgumentException("Unknown parameter '" + key + "'. Valid: u, t, r, a, b, e, m");
             }
         }
 
@@ -81,12 +85,13 @@ public final class QueryParser {
             area = areaAround(sender, config.defaultRadius(), config);
         }
 
-        boolean hasFilter = !users.isEmpty() || !actions.isEmpty() || !itemActions.isEmpty() || !include.isEmpty() || area != null;
+        boolean hasFilter = !users.isEmpty() || !actions.isEmpty() || !itemActions.isEmpty() || !eventActions.isEmpty()
+                || !include.isEmpty() || text != null || area != null;
         if (!hasFilter) {
-            throw new IllegalArgumentException("Add at least one filter: u:, r:, a: or b:");
+            throw new IllegalArgumentException("Add at least one filter: u:, r:, a:, b: or m:");
         }
         return new LookupQuery(List.copyOf(users), List.copyOf(actions), List.copyOf(itemActions),
-                List.copyOf(include), List.copyOf(exclude), since, area);
+                List.copyOf(eventActions), List.copyOf(include), List.copyOf(exclude), text, since, area);
     }
 
     public static LookupQuery.Area areaAround(CommandSender sender, int radius, ProtectConfig config) {
@@ -111,7 +116,8 @@ public final class QueryParser {
         return radius;
     }
 
-    private static void addAction(String name, List<LogAction> blockActions, List<ItemAction> itemActions) {
+    private static void addAction(String name, List<LogAction> blockActions, List<ItemAction> itemActions,
+                                  List<EventAction> eventActions) {
         for (LogAction action : LogAction.values()) {
             if (action.name().equalsIgnoreCase(name)) {
                 blockActions.add(action);
@@ -124,7 +130,14 @@ public final class QueryParser {
                 return;
             }
         }
-        throw new IllegalArgumentException("Unknown action '" + name + "'. Valid: break, place, add, remove, drop, pickup");
+        for (EventAction action : EventAction.values()) {
+            if (action.alias().equalsIgnoreCase(name)) {
+                eventActions.add(action);
+                return;
+            }
+        }
+        throw new IllegalArgumentException("Unknown action '" + name + "'. Valid: break, place, add, remove, drop, pickup, "
+                + "login, logout, chat, command, kill, sign");
     }
 
     private static List<String> split(String value) {

@@ -29,6 +29,8 @@ rollback:
   max-records: 250000
   # Blocks changed per server tick while rolling back (lower = less lag)
   blocks-per-tick: 500
+  # Also restore container contents (from logged container changes) on rollback and restore
+  containers: true
 
 logging:
   block-break: true
@@ -39,6 +41,40 @@ logging:
   item-drops: true
   # Can be noisy on busy servers
   item-pickups: false
+  # Players killing players or mobs, plus players dying to mobs or the environment
+  kills: true
+  player-deaths: true
+  # Logins and logouts
+  sessions: true
+  chat: true
+  commands: true
+  sign-edits: true
+  # Blocks destroyed by creepers, TNT, beds, anchors... TNT lit by a player is logged under that player
+  explosions: true
+  # Blocks burned away, and fire lit by players
+  fire-burn: true
+  fire-ignite: true
+  # Water or lava flowing over and replacing blocks like torches or redstone
+  fluid-replace: true
+  # Every block of new flowing water or lava. Very noisy, so off by default.
+  fluid-flow: false
+  # Trees and huge mushrooms growing, under the player who used bone meal if there was one
+  tree-growth: true
+  # A mob or player that dies in lava is blamed on the player who placed the nearest lava
+  # within this radius and time window
+  lava-attribution:
+    radius: 10
+    minutes: 30
+  # Commands that are never logged (no slash, case-insensitive). Keep password commands here.
+  ignored-commands:
+    - login
+    - l
+    - register
+    - reg
+    - unregister
+    - changepassword
+    - sp
+    - saturnprotect
 
 ignore:
   # Worlds that are never logged (case-insensitive)
