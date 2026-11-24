@@ -52,7 +52,9 @@ public final class PurgeCommand implements SubCommand {
     @Override
     public List<LiteralArgumentBuilder<CommandSourceStack>> nodes() {
         return List.of(literal("purge")
-                .then(Commands.argument("params", StringArgumentType.greedyString()).executes(this::run)));
+                .then(Commands.argument("params", StringArgumentType.greedyString())
+                        .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.PURGE))
+                        .executes(this::run)));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {

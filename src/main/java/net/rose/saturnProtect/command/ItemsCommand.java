@@ -43,7 +43,9 @@ public final class ItemsCommand implements SubCommand {
     @Override
     public List<LiteralArgumentBuilder<CommandSourceStack>> nodes() {
         return List.of(literal("items").then(
-                Commands.argument("params", StringArgumentType.greedyString()).executes(this::run)));
+                Commands.argument("params", StringArgumentType.greedyString())
+                        .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.ITEMS))
+                        .executes(this::run)));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {

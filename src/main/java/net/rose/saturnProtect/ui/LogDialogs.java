@@ -44,11 +44,12 @@ import java.util.List;
  */
 public final class LogDialogs {
 
-    private static final int BUTTON_WIDTH = 100;
+    private static final int BUTTON_WIDTH = 124;
     private static final int TEXT_WIDTH = 280;
 
     private static final TextColor SEPARATOR = NamedTextColor.DARK_GRAY;
     private static final TextColor COORDS = NamedTextColor.DARK_AQUA;
+    private static final TextColor WORLD = TextColor.color(0x8C8C8C);
 
     private LogDialogs() {
     }
@@ -94,34 +95,32 @@ public final class LogDialogs {
     private static void open(SaturnProtect plugin, LookupService lookups, Player player, String name,
                              long total, int page, int pages, List<DialogBody> entries) {
         List<DialogBody> body = new ArrayList<>();
-        body.add(DialogBody.plainMessage(Component.text()
-                .append(Component.text(total + " result" + (total == 1 ? "" : "s"), NamedTextColor.WHITE))
-                .append(Component.text("  \u00B7  ", SEPARATOR))
-                .append(Component.text("page " + page + " of " + pages, NamedTextColor.GRAY))
-                .build(), TEXT_WIDTH + 24));
+        body.add(header(total, page, pages));
         body.addAll(entries);
 
-        ClickCallback.Options once = ClickCallback.Options.builder().uses(1).build();
+        // Two columns, always four buttons, so the layout never shifts between pages:
+        //   « Prev     Next »
+        //   Refresh    In chat
+        // and Close underneath, full width. Prev / Next stay on the first and last page too, grayed out, and
+        // just reload the page you are on.
         List<ActionButton> buttons = new ArrayList<>();
+        buttons.add(page > 1
+                ? button(plugin, Component.text("\u00AB Prev", NamedTextColor.AQUA),
+                "Go to page " + (page - 1), () -> lookups.page(player, page - 1))
+                : button(plugin, Component.text("\u00AB Prev", NamedTextColor.DARK_GRAY),
+                "You are on the first page", () -> lookups.page(player, page)));
+        buttons.add(page < pages
+                ? button(plugin, Component.text("Next \u00BB", NamedTextColor.AQUA),
+                "Go to page " + (page + 1), () -> lookups.page(player, page + 1))
+                : button(plugin, Component.text("Next \u00BB", NamedTextColor.DARK_GRAY),
+                "You are on the last page", () -> lookups.page(player, page)));
+        buttons.add(button(plugin, Component.text("Refresh", NamedTextColor.GREEN),
+                "Run the lookup again and reload this page", () -> lookups.page(player, page)));
+        buttons.add(button(plugin, Component.text("In chat", NamedTextColor.YELLOW),
+                "Close this and print the page in chat", () -> lookups.pageInChat(player, page)));
 
-        if (page > 1) {
-            buttons.add(ActionButton.create(Component.text("\u00AB Prev", NamedTextColor.AQUA),
-                    Component.text("Go to page " + (page - 1)), BUTTON_WIDTH,
-                    DialogAction.customClick((view, audience) ->
-                            Bukkit.getScheduler().runTask(plugin, () -> lookups.page(player, page - 1)), once)));
-        }
-        if (page < pages) {
-            buttons.add(ActionButton.create(Component.text("Next \u00BB", NamedTextColor.AQUA),
-                    Component.text("Go to page " + (page + 1)), BUTTON_WIDTH,
-                    DialogAction.customClick((view, audience) ->
-                            Bukkit.getScheduler().runTask(plugin, () -> lookups.page(player, page + 1)), once)));
-        }
-        buttons.add(ActionButton.create(Component.text("In chat", NamedTextColor.YELLOW),
-                Component.text("Close this and print the page in chat"), BUTTON_WIDTH,
-                DialogAction.customClick((view, audience) ->
-                        Bukkit.getScheduler().runTask(plugin, () -> lookups.pageInChat(player, page)), once)));
-
-        ActionButton close = ActionButton.create(Component.text("Close"), null, BUTTON_WIDTH, null);
+        ActionButton close = ActionButton.create(Component.text("Close", NamedTextColor.GRAY),
+                null, BUTTON_WIDTH * 2 + 8, null);
 
         Component title = Component.text("SaturnProtect", NamedTextColor.AQUA, TextDecoration.BOLD)
                 .append(Component.text("  " + name, NamedTextColor.GRAY).decoration(TextDecoration.BOLD, false));
@@ -131,8 +130,27 @@ public final class LogDialogs {
                         .canCloseWithEscape(true)
                         .body(body)
                         .build())
-                .type(DialogType.multiAction(buttons, close, buttons.size())));
+                .type(DialogType.multiAction(buttons, close, 2)));
         player.showDialog(dialog);
+    }
+
+    /** One line above the entries: how many results, which page, and that the newest come first. */
+    private static DialogBody header(long total, int page, int pages) {
+        Component text = Component.text()
+                .append(Component.text(total + " result" + (total == 1 ? "" : "s"), NamedTextColor.WHITE, TextDecoration.BOLD))
+                .append(Component.text("  \u00B7  ", SEPARATOR))
+                .append(Component.text("page " + page + " of " + pages, NamedTextColor.GRAY))
+                .append(Component.text("  \u00B7  ", SEPARATOR))
+                .append(Component.text("newest first", NamedTextColor.DARK_GRAY))
+                .build();
+        return DialogBody.plainMessage(text, TEXT_WIDTH + 24);
+    }
+
+    /** A button that runs {@code action} on the main thread, once; the dialog it opens replaces this one. */
+    private static ActionButton button(SaturnProtect plugin, Component label, String tooltip, Runnable action) {
+        ClickCallback.Options once = ClickCallback.Options.builder().uses(1).build();
+        return ActionButton.create(label, Component.text(tooltip), BUTTON_WIDTH,
+                DialogAction.customClick((view, audience) -> Bukkit.getScheduler().runTask(plugin, action), once));
     }
 
     // ------------------------------------------------------------------ entries
@@ -146,12 +164,13 @@ public final class LogDialogs {
 
         Component what = Component.text(record.action().verb() + " ", placed ? NamedTextColor.GREEN : NamedTextColor.RED)
                 .append(Component.text(BlockText.pretty(shown), NamedTextColor.WHITE));
+        Component extra = null;
         if (placed && !BlockText.isAir(oldName)) {
-            what = what.append(Component.text(" (replaced " + BlockText.pretty(oldName) + ")", NamedTextColor.GRAY));
+            extra = Component.text("replaced " + BlockText.pretty(oldName), NamedTextColor.GRAY, TextDecoration.ITALIC);
         }
 
         Component text = entryText(record.actor(), what, now, record.time(), record.world(),
-                record.x(), record.y(), record.z(), record.rolledBack(), null);
+                record.x(), record.y(), record.z(), record.rolledBack(), extra);
         return withIcon(icon(shown), 1, text);
     }
 
@@ -213,7 +232,7 @@ public final class LogDialogs {
                 .append(Component.text("  \u00B7  ", SEPARATOR))
                 .append(Component.text(x + ", " + y + ", " + z, COORDS))
                 .append(Component.text("  \u00B7  ", SEPARATOR))
-                .append(Component.text(world, NamedTextColor.DARK_GRAY));
+                .append(Component.text(world, WORLD));
         if (rolledBack) {
             second = second.append(Component.text("  rolled back", NamedTextColor.DARK_GRAY, TextDecoration.ITALIC));
             first = first.decorate(TextDecoration.STRIKETHROUGH);

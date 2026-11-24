@@ -57,7 +57,9 @@ public final class RollbackCommand implements SubCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String literal) {
-        return literal(literal).then(Commands.argument("params", StringArgumentType.greedyString()).executes(this::run));
+        return literal(literal).then(Commands.argument("params", StringArgumentType.greedyString())
+                .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.ROLLBACK))
+                .executes(this::run));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
