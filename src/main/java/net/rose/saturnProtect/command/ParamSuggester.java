@@ -52,15 +52,13 @@ public final class ParamSuggester {
     }
 
     public static SuggestionProvider<CommandSourceStack> provider(ProtectConfig config, Kind kind) {
-        return (context, builder) -> {
-            suggest(config, kind, builder);
-            return builder.buildFuture();
-        };
+        return (context, builder) -> suggest(config, kind, builder).buildFuture();
     }
 
     // ------------------------------------------------------------------ token handling
 
-    private static void suggest(ProtectConfig config, Kind kind, SuggestionsBuilder builder) {
+    /** @return the builder holding the suggestions: an offset copy, so it is that one that must be built */
+    private static SuggestionsBuilder suggest(ProtectConfig config, Kind kind, SuggestionsBuilder builder) {
         String remaining = builder.getRemaining();
         int space = remaining.lastIndexOf(' ');
         String finished = remaining.substring(0, space + 1);
@@ -74,6 +72,7 @@ public final class ParamSuggester {
         } else {
             suggestValues(config, kind, token, colon, out);
         }
+        return out;
     }
 
     private static void suggestKeys(Kind kind, String finished, String token, SuggestionsBuilder out) {
