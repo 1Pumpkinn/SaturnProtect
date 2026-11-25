@@ -22,16 +22,16 @@ public final class CommandRegistrar {
         subs.add(help);
         subs.add(new InspectCommand(plugin.inspectors()));
         subs.add(new StatusCommand(plugin, plugin.database()));
-        subs.add(new LookupCommand(plugin.protectConfig(), plugin.lookups()));
+        subs.add(new LookupCommand(plugin, plugin.protectConfig(), plugin.lookups()));
         subs.add(new NearCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new ItemsCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new EventsCommand(plugin.protectConfig(), plugin.lookups()));
         subs.add(new SearchCommand(plugin));
         subs.add(new PageCommand(plugin.lookups()));
         subs.add(new RollbackCommand(plugin.protectConfig(), plugin.rollbacks(),
-                "rollback", "rb", "Roll back changes (needs t:, e.g. u:Steve t:2h)", false));
+                "rollback", "rb", "Roll back changes (needs a time, e.g. Steve 2h)", false));
         subs.add(new RollbackCommand(plugin.protectConfig(), plugin.rollbacks(),
-                "restore", "rs", "Re-apply rolled back changes (needs t:)", true));
+                "restore", "rs", "Re-apply rolled back changes (needs a time)", true));
         subs.add(new UndoCommand(plugin.rollbacks()));
         subs.add(new PurgeCommand(plugin.protectConfig(), plugin.purges(), plugin.rollbacks()));
         subs.add(new ReloadCommand(plugin));

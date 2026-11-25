@@ -195,7 +195,7 @@ public final class LogDialogs {
             case CHAT -> NamedTextColor.AQUA;
             case COMMAND -> NamedTextColor.YELLOW;
             case KILL -> NamedTextColor.RED;
-            case SIGN -> NamedTextColor.GOLD;
+            case SIGN, CONTAINER_OPEN -> NamedTextColor.GOLD;
             case ENTITY_PLACE, ENTITY_BREAK, ENTITY_ITEM -> NamedTextColor.LIGHT_PURPLE;
         };
 
@@ -203,7 +203,7 @@ public final class LogDialogs {
             case LOGIN, LOGOUT -> Component.text(action.verb(), color);
             case CHAT, SIGN -> Component.text(action.verb() + ": ", color)
                     .append(Component.text(subject, NamedTextColor.WHITE));
-            case COMMAND, KILL, ENTITY_PLACE, ENTITY_BREAK -> Component.text(action.verb() + " ", color)
+            case COMMAND, KILL, ENTITY_PLACE, ENTITY_BREAK, CONTAINER_OPEN -> Component.text(action.verb() + " ", color)
                     .append(Component.text(subject, NamedTextColor.WHITE));
             case ENTITY_ITEM -> Component.text(subject, color);
         };

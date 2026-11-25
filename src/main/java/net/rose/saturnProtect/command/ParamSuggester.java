@@ -28,21 +28,32 @@ import java.util.TreeSet;
  * can't complete it on its own: this works out which space separated token the cursor is in and completes only
  * that token.
  * <p>
- * Pressing tab on an empty token offers the keys that are still unused ({@code u:}, {@code t:}, ...), and
- * pressing it after a key offers values: players, time presets, radii, actions, blocks. Comma lists
- * ({@code u:Steve,Al<tab>}) complete the segment after the last comma and skip values already in the list.
+ * Plain values go by position, {@code /sp lookup <player> <time> <radius>}, so tab on an empty token offers
+ * players, then time presets, then radii. After those, tab offers the keys that are still free ({@code a:},
+ * {@code b:}, {@code e:}, ...), and after a key it offers that key's values: actions, blocks and so on. Keys
+ * still work anywhere ({@code u:Steve t:2d}). Comma lists ({@code Steve,Al<tab>}) complete the segment after
+ * the last comma and skip values already in the list.
  */
 public final class ParamSuggester {
 
     /** Which command is asking, since each accepts different keys and actions. */
     public enum Kind {
-        BLOCKS, ITEMS, EVENTS, ROLLBACK, PURGE
+        ANY, BLOCKS, ITEMS, EVENTS, ROLLBACK, PURGE
     }
+
+    /**
+     * Name of the greedy argument. The client prints an argument's name inside {@code <>} as the usage hint, so
+     * this is what makes {@code /sp lookup} show {@code [<player> <time> <radius>]}. The opening {@code <} and
+     * closing {@code >} are added by the client, the ones in the middle are part of the name.
+     */
+    public static final String ARGUMENT = "player> <time> <radius";
+    public static final String PURGE_ARGUMENT = "time";
 
     private static final List<String> TIME_PRESETS = List.of("30s", "5m", "30m", "1h", "6h", "12h", "1d", "3d", "1w", "2w", "30d");
     private static final List<String> TIME_UNITS = List.of("s", "m", "h", "d", "w");
     private static final List<Integer> RADIUS_PRESETS = List.of(5, 10, 20, 50, 100, 250, 500);
     private static final int MAX_PLAYER_SUGGESTIONS = 100;
+    private static final List<String> POSITIONAL = List.of("u", "t", "r");
 
     private static volatile List<String> blockNames;
     private static volatile List<String> itemNames;
@@ -68,50 +79,92 @@ public final class ParamSuggester {
 
         int colon = token.indexOf(':');
         if (colon < 0) {
-            suggestKeys(kind, finished, token, out);
+            suggestPlain(config, kind, finished, token, out);
         } else {
             suggestValues(config, kind, token, colon, out);
         }
         return out;
     }
 
-    private static void suggestKeys(Kind kind, String finished, String token, SuggestionsBuilder out) {
+    /**
+     * A token without a colon: the next positional value ({@code <player>}, then {@code <time>}, then
+     * {@code <radius>}), or once those three are filled, the keys that are still free.
+     */
+    private static void suggestPlain(ProtectConfig config, Kind kind, String finished, String token,
+                                     SuggestionsBuilder out) {
         Set<String> used = new HashSet<>();
+        int positional = 0;
         for (String done : finished.trim().split("\\s+")) {
             if (done.isEmpty()) {
                 continue;
             }
             int colon = done.indexOf(':');
-            used.add(colon > 0 ? canonicalKey(done.substring(0, colon)) : done.toLowerCase(Locale.ROOT));
+            String lower = done.toLowerCase(Locale.ROOT);
+            if (colon > 0) {
+                used.add(canonicalKey(done.substring(0, colon)));
+            } else if (kind == Kind.PURGE && (lower.equals("vacuum") || lower.equals("confirm"))) {
+                used.add(lower);
+            } else {
+                positional++;
+            }
         }
 
         String lower = token.toLowerCase(Locale.ROOT);
-        for (String key : keysFor(kind)) {
-            // plain words (vacuum, confirm) are offered as they are, parameters get their colon
-            boolean word = key.length() > 1;
-            if (used.contains(key) || !key.startsWith(lower)) {
-                continue;
+        String slot = positionalKey(kind, positional, used);
+        if (slot != null) {
+            suggestForKey(config, kind, slot, "", token, out);
+        } else {
+            for (String key : keysFor(kind)) {
+                if (!used.contains(key) && !POSITIONAL.contains(key) && key.startsWith(lower)) {
+                    out.suggest(key.length() > 1 ? key : key + ":");
+                }
             }
-            out.suggest(word ? key : key + ":");
         }
+        if (kind == Kind.PURGE) {
+            for (String word : List.of("vacuum", "confirm")) {
+                if (!used.contains(word) && word.startsWith(lower)) {
+                    out.suggest(word);
+                }
+            }
+        }
+    }
+
+    /** Which key the n-th plain value stands for. */
+    private static String positionalKey(Kind kind, int index, Set<String> used) {
+        if (kind == Kind.PURGE) {
+            return index == 0 && !used.contains("t") ? "t" : null;
+        }
+        // slots already filled with a key (u:Steve) are passed over, like the parser does
+        while (index < POSITIONAL.size() && used.contains(POSITIONAL.get(index))) {
+            index++;
+        }
+        return index < POSITIONAL.size() ? POSITIONAL.get(index) : null;
     }
 
     private static List<String> keysFor(Kind kind) {
         return switch (kind) {
             case BLOCKS, ITEMS, ROLLBACK -> List.of("u", "t", "r", "a", "b", "e");
-            case EVENTS -> List.of("u", "t", "r", "a", "b", "e", "m");
-            case PURGE -> List.of("t", "vacuum", "confirm");
+            case ANY, EVENTS -> List.of("u", "t", "r", "a", "b", "e", "m");
+            case PURGE -> List.of("t");
         };
     }
 
+    /** A token that starts with {@code key:}. */
     private static void suggestValues(ProtectConfig config, Kind kind, String token, int colon,
                                       SuggestionsBuilder out) {
-        String key = canonicalKey(token.substring(0, colon));
-        String value = token.substring(colon + 1);
+        suggestForKey(config, kind, canonicalKey(token.substring(0, colon)), token.substring(0, colon + 1),
+                token.substring(colon + 1), out);
+    }
 
+    /**
+     * Completes {@code value} as the value of {@code key}. {@code head} is what already stands before it in the
+     * token ({@code u:} or nothing for a positional value) and is kept in front of every suggestion.
+     */
+    private static void suggestForKey(ProtectConfig config, Kind kind, String key, String head, String value,
+                                      SuggestionsBuilder out) {
         boolean list = key.equals("u") || key.equals("a") || key.equals("b") || key.equals("e");
         int lastComma = list ? value.lastIndexOf(',') : -1;
-        String prefix = token.substring(0, colon + 1 + lastComma + 1);
+        String prefix = head + value.substring(0, lastComma + 1);
         String segment = value.substring(lastComma + 1).toLowerCase(Locale.ROOT);
 
         Set<String> chosen = new HashSet<>();
@@ -212,6 +265,18 @@ public final class ParamSuggester {
     private static List<String> actions(Kind kind) {
         List<String> out = new ArrayList<>();
         switch (kind) {
+            case ANY -> {
+                for (LogAction action : LogAction.values()) {
+                    out.add(action.name().toLowerCase(Locale.ROOT));
+                }
+                out.add("container");
+                for (ItemAction action : ItemAction.values()) {
+                    out.add(action.alias());
+                }
+                for (EventAction action : EventAction.values()) {
+                    out.add(action.alias());
+                }
+            }
             case BLOCKS -> {
                 for (LogAction action : LogAction.values()) {
                     out.add(action.name().toLowerCase(Locale.ROOT));

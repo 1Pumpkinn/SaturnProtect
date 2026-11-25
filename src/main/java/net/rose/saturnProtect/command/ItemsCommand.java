@@ -27,12 +27,17 @@ public final class ItemsCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "items <u:user t:time r:radius a:add|remove|drop|pickup b:item>";
+        return "items [<player> <time> <radius>] [a:add|remove|drop|pickup b:item]";
     }
 
     @Override
     public String description() {
         return "Search container, drop and pickup history";
+    }
+
+    @Override
+    public boolean hidden() {
+        return true;
     }
 
     @Override
@@ -42,15 +47,17 @@ public final class ItemsCommand implements SubCommand {
 
     @Override
     public List<LiteralArgumentBuilder<CommandSourceStack>> nodes() {
-        return List.of(literal("items").then(
-                Commands.argument("params", StringArgumentType.greedyString())
+        return List.of(literal("items").executes(context -> run(context.getSource().getSender(), "")).then(
+                Commands.argument(ParamSuggester.ARGUMENT, StringArgumentType.greedyString())
                         .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.ITEMS))
                         .executes(this::run)));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
-        CommandSender sender = context.getSource().getSender();
-        String params = StringArgumentType.getString(context, "params");
+        return run(context.getSource().getSender(), StringArgumentType.getString(context, ParamSuggester.ARGUMENT));
+    }
+
+    private int run(CommandSender sender, String params) {
         try {
             LookupQuery query = QueryParser.parse(sender, params, config);
             if (!query.actions().isEmpty()) {

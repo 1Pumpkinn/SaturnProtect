@@ -38,7 +38,7 @@ public final class RollbackCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return name + " | " + alias + " <t:time + filters> (blocks and containers)";
+        return name + " | " + alias + " <player> <time> [<radius>] (time is required)";
     }
 
     @Override
@@ -57,14 +57,16 @@ public final class RollbackCommand implements SubCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String literal) {
-        return literal(literal).then(Commands.argument("params", StringArgumentType.greedyString())
+        return literal(literal).executes(context -> run(context.getSource().getSender(), "")).then(Commands.argument(ParamSuggester.ARGUMENT, StringArgumentType.greedyString())
                 .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.ROLLBACK))
                 .executes(this::run));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
-        CommandSender sender = context.getSource().getSender();
-        String params = StringArgumentType.getString(context, "params");
+        return run(context.getSource().getSender(), StringArgumentType.getString(context, ParamSuggester.ARGUMENT));
+    }
+
+    private int run(CommandSender sender, String params) {
         try {
             LookupQuery query = QueryParser.parse(sender, params, config, true);
             if (!query.eventActions().isEmpty() || query.text() != null) {

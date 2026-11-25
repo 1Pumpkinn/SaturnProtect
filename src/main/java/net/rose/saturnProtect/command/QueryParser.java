@@ -11,15 +11,21 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Parses CoreProtect-style parameters: {@code u:Name,Other t:3d r:10 a:break b:stone,dirt e:grass_block m:text}.
+ * The first three can also be given by position, {@code Name,Other 3d 10}, with {@code -} to skip one.
  */
 public final class QueryParser {
 
     private static final String DEFAULT_TIME = "3d";
+
+    /** What the 1st, 2nd and 3rd plain value mean: {@code /sp lookup Steve 2d 10}. */
+    private static final List<String> POSITIONAL_KEYS = List.of("u", "t", "r");
 
     private QueryParser() {
     }
@@ -41,16 +47,36 @@ public final class QueryParser {
         String radius = null;
         String text = null;
 
+        Set<String> explicit = explicitKeys(input);
+        int positional = 0;
         for (String token : input.trim().split("\\s+")) {
             if (token.isEmpty()) {
                 continue;
             }
             int colon = token.indexOf(':');
-            if (colon <= 0 || colon == token.length() - 1) {
-                throw new IllegalArgumentException("Invalid parameter '" + token + "'. Use key:value, e.g. u:Steve t:2d r:10");
+            String key;
+            String value;
+            if (colon < 0) {
+                // plain values go by position: <player> <time> <radius>, and '-' skips one.
+                // A slot already filled with a key (u:Steve 2d) is passed over, so 2d is still the time.
+                while (positional < POSITIONAL_KEYS.size() && explicit.contains(POSITIONAL_KEYS.get(positional))) {
+                    positional++;
+                }
+                if (positional >= POSITIONAL_KEYS.size()) {
+                    throw new IllegalArgumentException("Too many values at '" + token + "'. Order is <player> <time> <radius>; "
+                            + "anything else needs a key, e.g. a:break b:stone");
+                }
+                key = POSITIONAL_KEYS.get(positional++);
+                value = token;
+                if (value.equals("-") || value.equals("*")) {
+                    continue;
+                }
+            } else if (colon == 0 || colon == token.length() - 1) {
+                throw new IllegalArgumentException("Invalid parameter '" + token + "'. Use <player> <time> <radius> or key:value, e.g. Steve 2d 10");
+            } else {
+                key = token.substring(0, colon).toLowerCase(Locale.ROOT);
+                value = token.substring(colon + 1);
             }
-            String key = token.substring(0, colon).toLowerCase(Locale.ROOT);
-            String value = token.substring(colon + 1);
 
             switch (key) {
                 case "u", "user" -> users.addAll(split(value));
@@ -94,6 +120,23 @@ public final class QueryParser {
                 List.copyOf(eventActions), List.copyOf(include), List.copyOf(exclude), text, since, area);
     }
 
+    /** The positional slots (u, t, r) that the input already fills with an explicit {@code key:value}. */
+    private static Set<String> explicitKeys(String input) {
+        Set<String> keys = new HashSet<>();
+        for (String token : input.trim().split("\\s+")) {
+            int colon = token.indexOf(':');
+            if (colon > 0) {
+                keys.add(switch (token.substring(0, colon).toLowerCase(Locale.ROOT)) {
+                    case "user" -> "u";
+                    case "time" -> "t";
+                    case "radius" -> "r";
+                    default -> token.substring(0, colon).toLowerCase(Locale.ROOT);
+                });
+            }
+        }
+        return keys;
+    }
+
     public static LookupQuery.Area areaAround(CommandSender sender, int radius, ProtectConfig config) {
         if (!(sender instanceof Player player)) {
             throw new IllegalArgumentException("Console must use r:global or filter by user/block.");
@@ -118,6 +161,12 @@ public final class QueryParser {
 
     private static void addAction(String name, List<LogAction> blockActions, List<ItemAction> itemActions,
                                   List<EventAction> eventActions) {
+        if (name.equalsIgnoreCase("container")) {
+            // shorthand for everything put in or taken out of chests, barrels, hoppers...
+            itemActions.add(ItemAction.CONTAINER_ADD);
+            itemActions.add(ItemAction.CONTAINER_REMOVE);
+            return;
+        }
         for (LogAction action : LogAction.values()) {
             if (action.name().equalsIgnoreCase(name)) {
                 blockActions.add(action);
@@ -136,8 +185,8 @@ public final class QueryParser {
                 return;
             }
         }
-        throw new IllegalArgumentException("Unknown action '" + name + "'. Valid: break, place, add, remove, drop, pickup, "
-                + "login, logout, chat, command, kill, sign, entity-place, entity-break, entity-item");
+        throw new IllegalArgumentException("Unknown action '" + name + "'. Valid: break, place, container, add, remove, drop, pickup, "
+                + "open, login, logout, chat, command, kill, sign, entity-place, entity-break, entity-item");
     }
 
     private static List<String> split(String value) {

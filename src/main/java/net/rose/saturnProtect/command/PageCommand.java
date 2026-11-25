@@ -29,6 +29,11 @@ public final class PageCommand implements SubCommand {
     }
 
     @Override
+    public boolean hidden() {
+        return true;
+    }
+
+    @Override
     public String permission() {
         return Permissions.LOOKUP;
     }

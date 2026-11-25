@@ -105,6 +105,10 @@ public final class ProtectConfig {
         return config.getBoolean("logging.containers", true);
     }
 
+    public boolean logContainerOpens() {
+        return config.getBoolean("logging.container-opens", true);
+    }
+
     public boolean logItemDrops() {
         return config.getBoolean("logging.item-drops", true);
     }

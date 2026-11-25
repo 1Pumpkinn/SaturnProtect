@@ -15,6 +15,11 @@ public interface SubCommand {
 
     String permission();
 
+    /** Hidden commands work but are left out of /sp help, e.g. old names kept so nobody's habits break. */
+    default boolean hidden() {
+        return false;
+    }
+
     /** One node per name/alias. Use {@link #literal(String)} so the permission check is applied. */
     List<LiteralArgumentBuilder<CommandSourceStack>> nodes();
 

@@ -36,7 +36,7 @@ public final class PurgeCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "purge <t:time> [vacuum] [confirm]";
+        return "purge <time> [vacuum] [confirm]";
     }
 
     @Override
@@ -52,14 +52,17 @@ public final class PurgeCommand implements SubCommand {
     @Override
     public List<LiteralArgumentBuilder<CommandSourceStack>> nodes() {
         return List.of(literal("purge")
-                .then(Commands.argument("params", StringArgumentType.greedyString())
+                .executes(context -> run(context.getSource().getSender(), ""))
+                .then(Commands.argument(ParamSuggester.PURGE_ARGUMENT, StringArgumentType.greedyString())
                         .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.PURGE))
                         .executes(this::run)));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
-        CommandSender sender = context.getSource().getSender();
-        String params = StringArgumentType.getString(context, "params");
+        return run(context.getSource().getSender(), StringArgumentType.getString(context, ParamSuggester.PURGE_ARGUMENT));
+    }
+
+    private int run(CommandSender sender, String params) {
         try {
             String time = null;
             boolean confirm = false;
@@ -70,6 +73,8 @@ public final class PurgeCommand implements SubCommand {
                     confirm = true;
                 } else if (lower.equals("vacuum")) {
                     vacuum = true;
+                } else if (!lower.contains(":")) {
+                    time = token;
                 } else if (lower.startsWith("t:")) {
                     time = token.substring(2);
                 } else if (lower.startsWith("time:")) {

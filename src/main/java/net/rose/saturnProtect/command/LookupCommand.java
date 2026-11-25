@@ -7,33 +7,49 @@ import com.mojang.brigadier.context.CommandContext;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import net.rose.saturnProtect.Permissions;
+import net.rose.saturnProtect.SaturnProtect;
 import net.rose.saturnProtect.config.ProtectConfig;
 import net.rose.saturnProtect.core.LookupService;
 import net.rose.saturnProtect.model.EventAction;
 import net.rose.saturnProtect.model.LookupQuery;
+import net.rose.saturnProtect.ui.Dialogs;
 import net.rose.saturnProtect.util.Messages;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 
 import java.util.List;
 
+/**
+ * The one search command. What gets searched follows from the actions given: {@code a:break|place|kill} for
+ * blocks, {@code a:add|remove|drop|pickup} (or {@code a:container}) for items, and {@code a:open|login|logout|
+ * chat|command|sign|entity-*} for events. With no action it searches blocks. Without any arguments a player
+ * gets the search form. {@code /sp items} and {@code /sp events} still work but are hidden from help.
+ */
 public final class LookupCommand implements SubCommand {
 
+    /** Which log a query reads. */
+    public enum Kind {
+        BLOCKS, ITEMS, EVENTS
+    }
+
+    private final SaturnProtect plugin;
     private final ProtectConfig config;
     private final LookupService lookups;
 
-    public LookupCommand(ProtectConfig config, LookupService lookups) {
+    public LookupCommand(SaturnProtect plugin, ProtectConfig config, LookupService lookups) {
+        this.plugin = plugin;
         this.config = config;
         this.lookups = lookups;
     }
 
     @Override
     public String usage() {
-        return "lookup | l <u:user t:time r:radius a:break|place|kill b:block e:exclude>";
+        return "lookup | l [<player> <time> <radius>] [a:action b:block e:exclude]";
     }
 
     @Override
     public String description() {
-        return "Search block changes and kills (e.g. u:Steve t:2d r:10 a:break)";
+        return "Search blocks, containers, chat, sessions... Actions: break place kill add remove open login chat. No arguments opens a form";
     }
 
     @Override
@@ -47,28 +63,53 @@ public final class LookupCommand implements SubCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String name) {
-        return literal(name).then(Commands.argument("params", StringArgumentType.greedyString())
-                .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.BLOCKS))
-                .executes(this::run));
+        return literal(name)
+                .executes(context -> run(context.getSource().getSender(), ""))
+                .then(Commands.argument(ParamSuggester.ARGUMENT, StringArgumentType.greedyString())
+                        .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.ANY))
+                        .executes(this::run));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
-        CommandSender sender = context.getSource().getSender();
-        String params = StringArgumentType.getString(context, "params");
+        return run(context.getSource().getSender(), StringArgumentType.getString(context, ParamSuggester.ARGUMENT));
+    }
+
+    private int run(CommandSender sender, String params) {
+        if (params.isBlank() && sender instanceof Player player) {
+            Dialogs.openSearch(plugin, player);
+            return Command.SINGLE_SUCCESS;
+        }
         try {
             LookupQuery query = QueryParser.parse(sender, params, config);
-            if (!query.itemActions().isEmpty()) {
-                throw new IllegalArgumentException("add/remove/drop/pickup are item actions, use /sp items for those.");
+            switch (route(query)) {
+                case ITEMS -> lookups.runItems(sender, query);
+                case EVENTS -> lookups.runEvents(sender, query);
+                case BLOCKS -> lookups.run(sender, query);
             }
-            boolean otherEvents = query.eventActions().stream().anyMatch(action -> action != EventAction.KILL);
-            if (otherEvents || query.text() != null) {
-                throw new IllegalArgumentException("login/logout/chat/command/sign/entity-* are events, use /sp events for those.");
-            }
-            lookups.run(sender, query);
             return Command.SINGLE_SUCCESS;
         } catch (IllegalArgumentException ex) {
             sender.sendMessage(Messages.error(ex.getMessage()));
             return 0;
         }
+    }
+
+    /**
+     * Decides which log a query reads from its actions. Kills count as block lookups, since they are listed
+     * together with block changes.
+     *
+     * @throws IllegalArgumentException if the actions belong to more than one kind
+     */
+    public static Kind route(LookupQuery query) {
+        boolean blocks = !query.actions().isEmpty();
+        boolean items = !query.itemActions().isEmpty();
+        boolean events = query.text() != null
+                || query.eventActions().stream().anyMatch(action -> action != EventAction.KILL);
+
+        int kinds = (blocks ? 1 : 0) + (items ? 1 : 0) + (events ? 1 : 0);
+        if (kinds > 1) {
+            throw new IllegalArgumentException("Search one kind at a time: blocks (break, place, kill), "
+                    + "containers (add, remove, drop, pickup) or events (open, login, logout, chat, command, sign, entity-*).");
+        }
+        return items ? Kind.ITEMS : events ? Kind.EVENTS : Kind.BLOCKS;
     }
 }

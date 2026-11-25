@@ -43,6 +43,8 @@ logging:
   buckets: true
   # Net item changes inside chests, barrels, hoppers, furnaces... per open/close
   containers: true
+  # Also log every time a player opens a container (a:open), even if nothing was moved
+  container-opens: true
   item-drops: true
   # Can be noisy on busy servers
   item-pickups: false

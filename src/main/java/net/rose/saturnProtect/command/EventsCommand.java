@@ -27,12 +27,17 @@ public final class EventsCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "events | ev <u:user t:time r:radius a:login|logout|chat|command|kill|sign|entity-place|entity-break|entity-item b:victim|entity m:text>";
+        return "events | ev [<player> <time> <radius>] [a:login|logout|chat|command|kill|sign|entity-* b:victim|entity m:text]";
     }
 
     @Override
     public String description() {
         return "Search sessions, chat, commands, kills, signs, item frames and armor stands";
+    }
+
+    @Override
+    public boolean hidden() {
+        return true;
     }
 
     @Override
@@ -46,14 +51,16 @@ public final class EventsCommand implements SubCommand {
     }
 
     private LiteralArgumentBuilder<CommandSourceStack> build(String name) {
-        return literal(name).then(Commands.argument("params", StringArgumentType.greedyString())
+        return literal(name).executes(context -> run(context.getSource().getSender(), "")).then(Commands.argument(ParamSuggester.ARGUMENT, StringArgumentType.greedyString())
                 .suggests(ParamSuggester.provider(config, ParamSuggester.Kind.EVENTS))
                 .executes(this::run));
     }
 
     private int run(CommandContext<CommandSourceStack> context) {
-        CommandSender sender = context.getSource().getSender();
-        String params = StringArgumentType.getString(context, "params");
+        return run(context.getSource().getSender(), StringArgumentType.getString(context, ParamSuggester.ARGUMENT));
+    }
+
+    private int run(CommandSender sender, String params) {
         try {
             LookupQuery query = QueryParser.parse(sender, params, config);
             if (!query.actions().isEmpty() || !query.itemActions().isEmpty()) {

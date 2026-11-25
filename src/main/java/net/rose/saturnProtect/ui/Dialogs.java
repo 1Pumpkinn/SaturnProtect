@@ -6,16 +6,14 @@ import io.papermc.paper.registry.data.dialog.DialogBase;
 import io.papermc.paper.registry.data.dialog.action.DialogAction;
 import io.papermc.paper.registry.data.dialog.body.DialogBody;
 import io.papermc.paper.registry.data.dialog.input.DialogInput;
-import io.papermc.paper.registry.data.dialog.input.SingleOptionDialogInput;
 import io.papermc.paper.registry.data.dialog.type.DialogType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickCallback;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.rose.saturnProtect.SaturnProtect;
+import net.rose.saturnProtect.command.LookupCommand;
 import net.rose.saturnProtect.command.QueryParser;
-import net.rose.saturnProtect.model.EventAction;
-import net.rose.saturnProtect.model.LookupQuery;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -36,14 +34,14 @@ public final class Dialogs {
     }
 
     /** What the search form holds. Kept so a mistake reopens the form filled in instead of wiping it. */
-    private record Form(String user, String time, String radius, String type, String action, String block,
+    private record Form(String user, String time, String radius, String action, String block,
                         String exclude) {
     }
 
     /** The lookup form behind {@code /sp search}. Main thread only. */
     public static void openSearch(SaturnProtect plugin, Player player) {
         Form blank = new Form("", "3d", String.valueOf(plugin.protectConfig().defaultRadius()),
-                "lookup", "", "", "");
+                "", "", "");
         openSearch(plugin, player, blank, null);
     }
 
@@ -57,7 +55,6 @@ public final class Dialogs {
                             orEmpty(view.getText("user")),
                             orEmpty(view.getText("time")),
                             orEmpty(view.getText("radius")),
-                            view.getText("type") == null ? "lookup" : view.getText("type"),
                             orEmpty(view.getText("action")),
                             orEmpty(view.getText("block")),
                             orEmpty(view.getText("exclude")));
@@ -68,7 +65,7 @@ public final class Dialogs {
 
         List<DialogBody> body = new ArrayList<>();
         body.add(DialogBody.plainMessage(Component.text(
-                "Build a lookup without remembering the syntax. Leave a field empty to skip it.",
+                "Searches blocks, containers, chat and more. Leave a field empty to skip it. The actions decide what is searched.",
                 NamedTextColor.GRAY), FIELD_WIDTH));
         if (error != null) {
             body.add(DialogBody.plainMessage(Component.text("\u26A0 " + error, NamedTextColor.RED), FIELD_WIDTH));
@@ -81,15 +78,7 @@ public final class Dialogs {
                         .width(FIELD_WIDTH).initial(form.time()).maxLength(16).build(),
                 DialogInput.text("radius", label("Radius", "a number, or global"))
                         .width(FIELD_WIDTH).initial(form.radius()).maxLength(8).build(),
-                DialogInput.singleOption("type", label("Search in", null), List.of(
-                                SingleOptionDialogInput.OptionEntry.create("lookup",
-                                        Component.text("Blocks and kills", NamedTextColor.WHITE), form.type().equals("lookup")),
-                                SingleOptionDialogInput.OptionEntry.create("items",
-                                        Component.text("Containers and drops", NamedTextColor.WHITE), form.type().equals("items")),
-                                SingleOptionDialogInput.OptionEntry.create("events",
-                                        Component.text("Chat, commands, sessions, frames", NamedTextColor.WHITE), form.type().equals("events"))))
-                        .width(FIELD_WIDTH).build(),
-                DialogInput.text("action", label("Actions", "optional, e.g. break,place"))
+                DialogInput.text("action", label("Actions", "optional: break, place, add, remove, open, chat..."))
                         .width(FIELD_WIDTH).initial(form.action()).maxLength(64).build(),
                 DialogInput.text("block", label("Only these blocks or items", "optional, e.g. tnt,lava"))
                         .width(FIELD_WIDTH).initial(form.block()).maxLength(64).build(),
@@ -158,34 +147,13 @@ public final class Dialogs {
             if (params.isEmpty()) {
                 throw new IllegalArgumentException("Fill in at least one field.");
             }
-            checkType(form.type(), QueryParser.parse(player, params, plugin.protectConfig()));
+            // same check the command does, so a mix of kinds shows up here and not in chat
+            LookupCommand.route(QueryParser.parse(player, params, plugin.protectConfig()));
         } catch (IllegalArgumentException ex) {
             openSearch(plugin, player, form, ex.getMessage());
             return;
         }
-        player.performCommand("sp " + form.type() + " " + params);
-    }
-
-    /** The same rules the three commands enforce, so the mistake shows up in the form and not in chat. */
-    private static void checkType(String type, LookupQuery query) {
-        switch (type) {
-            case "items" -> {
-                if (!query.actions().isEmpty() || !query.eventActions().isEmpty() || query.text() != null) {
-                    throw new IllegalArgumentException("Those actions are not container or drop actions. Pick another 'Search in'.");
-                }
-            }
-            case "events" -> {
-                if (!query.actions().isEmpty() || !query.itemActions().isEmpty()) {
-                    throw new IllegalArgumentException("Break, place, add, remove, drop and pickup are not events. Pick another 'Search in'.");
-                }
-            }
-            default -> {
-                boolean otherEvents = query.eventActions().stream().anyMatch(action -> action != EventAction.KILL);
-                if (!query.itemActions().isEmpty() || otherEvents || query.text() != null) {
-                    throw new IllegalArgumentException("Only break, place and kill work for blocks. Pick another 'Search in'.");
-                }
-            }
-        }
+        player.performCommand("sp lookup " + params);
     }
 
     // ------------------------------------------------------------------ small helpers

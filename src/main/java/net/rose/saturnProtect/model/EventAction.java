@@ -12,7 +12,9 @@ public enum EventAction {
     /** An item frame, glow item frame, painting or armor stand was broken. */
     ENTITY_BREAK(7, "broke", "entity-break"),
     /** An item was put in or taken out of an item frame, or put on or taken off an armor stand. */
-    ENTITY_ITEM(8, "changed", "entity-item");
+    ENTITY_ITEM(8, "changed", "entity-item"),
+    /** A player opened a chest, barrel, furnace, hopper, minecart chest... what they moved is logged as item actions. */
+    CONTAINER_OPEN(9, "opened", "open");
 
     private final int id;
     private final String verb;

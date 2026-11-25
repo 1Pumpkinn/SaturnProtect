@@ -45,7 +45,7 @@ public final class HelpCommand implements SubCommand {
     public void send(CommandSender sender) {
         sender.sendMessage(Messages.header("Help"));
         for (SubCommand sub : all) {
-            if (!sender.hasPermission(sub.permission())) {
+            if (sub.hidden() || !sender.hasPermission(sub.permission())) {
                 continue;
             }
             sender.sendMessage(Component.text("/sp ", NamedTextColor.AQUA)
