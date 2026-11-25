@@ -23,7 +23,9 @@ import net.rose.saturnProtect.model.ItemRecord;
 import net.rose.saturnProtect.model.LogAction;
 import net.rose.saturnProtect.model.LookupEntry;
 import net.rose.saturnProtect.model.LookupResult;
+import net.rose.saturnProtect.model.PositionHistory;
 import net.rose.saturnProtect.util.BlockText;
+import net.rose.saturnProtect.util.Messages;
 import net.rose.saturnProtect.util.TimeFormat;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -31,6 +33,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -53,8 +56,6 @@ public final class LogDialogs {
 
     private LogDialogs() {
     }
-
-    // ------------------------------------------------------------------ public entry points
 
     public static void blocks(SaturnProtect plugin, LookupService lookups, Player player,
                               int page, int pages, LookupResult result) {
@@ -90,7 +91,58 @@ public final class LogDialogs {
         open(plugin, lookups, player, "Event log", result.total(), page, pages, body);
     }
 
-    // ------------------------------------------------------------------ dialog frame
+    private record Dated(long time, DialogBody body) {
+    }
+
+    /**
+     * The inspector dialog: everything logged at one spot in one scrolling list, newest first. {@code refresh}
+     * runs the inspect again and opens a new dialog.
+     */
+    public static void history(SaturnProtect plugin, Player player, String world, int x, int y, int z,
+                               PositionHistory history, int limit, Runnable refresh) {
+        long now = System.currentTimeMillis();
+        List<Dated> entries = new ArrayList<>();
+        for (BlockRecord record : history.blocks()) {
+            entries.add(new Dated(record.time(), blockEntry(now, record)));
+        }
+        for (ItemRecord record : history.items()) {
+            entries.add(new Dated(record.time(), itemEntry(now, record)));
+        }
+        for (EventRecord record : history.events()) {
+            entries.add(new Dated(record.time(), eventEntry(now, record)));
+        }
+        entries.sort(Comparator.comparingLong(Dated::time).reversed());
+
+        List<DialogBody> body = new ArrayList<>();
+        int shown = Math.min(entries.size(), limit);
+        Component summary = Component.text()
+                .append(Component.text(x + ", " + y + ", " + z, COORDS))
+                .append(Component.text("  \u00B7  ", SEPARATOR))
+                .append(Component.text(world, WORLD))
+                .append(Component.text("  \u00B7  ", SEPARATOR))
+                .append(Component.text(entries.isEmpty() ? "nothing logged here"
+                        : shown + " entr" + (shown == 1 ? "y" : "ies") + ", newest first", NamedTextColor.GRAY))
+                .build();
+        body.add(DialogBody.plainMessage(summary, TEXT_WIDTH + 24));
+        for (int i = 0; i < shown; i++) {
+            body.add(entries.get(i).body());
+        }
+
+        ActionButton refreshButton = button(plugin, Component.text("Refresh", NamedTextColor.GREEN),
+                "Look at this spot again", refresh);
+        ActionButton close = ActionButton.create(Component.text("Close", NamedTextColor.GRAY),
+                null, BUTTON_WIDTH * 2 + 8, null);
+
+        Component title = Component.text("SaturnProtect", NamedTextColor.AQUA, TextDecoration.BOLD)
+                .append(Component.text("  Inspect", NamedTextColor.GRAY).decoration(TextDecoration.BOLD, false));
+        Dialog dialog = Dialog.create(builder -> builder.empty()
+                .base(DialogBase.builder(title)
+                        .canCloseWithEscape(true)
+                        .body(body)
+                        .build())
+                .type(DialogType.multiAction(List.of(refreshButton), close, 1)));
+        player.showDialog(dialog);
+    }
 
     private static void open(SaturnProtect plugin, LookupService lookups, Player player, String name,
                              long total, int page, int pages, List<DialogBody> entries) {
@@ -153,8 +205,6 @@ public final class LogDialogs {
                 DialogAction.customClick((view, audience) -> Bukkit.getScheduler().runTask(plugin, action), once));
     }
 
-    // ------------------------------------------------------------------ entries
-
     private static DialogBody blockEntry(long now, BlockRecord record) {
         String oldName = BlockText.name(record.oldData());
         String newName = BlockText.name(record.newData());
@@ -178,7 +228,8 @@ public final class LogDialogs {
         String name = BlockText.name(record.itemType());
         Component what = Component.text(record.action().verb() + " ", NamedTextColor.GOLD)
                 .append(Component.text(record.amount() + "x ", NamedTextColor.WHITE))
-                .append(Component.text(BlockText.pretty(name), NamedTextColor.WHITE));
+                .append(Component.text(BlockText.pretty(name), NamedTextColor.WHITE))
+                .append(Component.text(Messages.containerSuffix(record), NamedTextColor.GOLD));
 
         Component text = entryText(record.actor(), what, now, record.time(), record.world(),
                 record.x(), record.y(), record.z(), record.rolledBack(), null);

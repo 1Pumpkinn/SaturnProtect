@@ -7,6 +7,8 @@ import net.rose.saturnProtect.core.InspectorManager;
 import net.rose.saturnProtect.db.Database;
 import net.rose.saturnProtect.util.Messages;
 import net.rose.saturnProtect.core.ContainerUtil;
+import net.rose.saturnProtect.ui.LogDialogs;
+import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.entity.Player;
@@ -69,11 +71,19 @@ public final class InspectListener implements Listener {
         if (event.getAction() == org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK) {
             Block container = containerAt(clicked);
             if (container != null) {
-                inspectContainer(player, container);
+                if (config.dialogInspect()) {
+                    inspectDialog(player, clicked, container);
+                } else {
+                    inspectContainer(player, container);
+                }
                 return;
             }
         }
-        inspect(player, target);
+        if (config.dialogInspect()) {
+            inspectDialog(player, target, target);
+        } else {
+            inspect(player, target);
+        }
     }
 
     private static Block containerAt(Block block) {
@@ -100,6 +110,30 @@ public final class InspectListener implements Listener {
         inspectors.remove(event.getPlayer().getUniqueId());
         plugin.lookups().forget(event.getPlayer().getUniqueId());
         plugin.rollbacks().forget(event.getPlayer().getUniqueId());
+    }
+
+    /**
+     * Opens the dialog with everything logged at a spot. Block changes come from {@code block}, container moves
+     * and spot bound events from {@code content}: the same block, except for a double chest whose halves share
+     * the left half's history.
+     */
+    private void inspectDialog(Player player, Block block, Block content) {
+        String world = block.getWorld().getName();
+        database.positionHistory(world, block.getX(), block.getY(), block.getZ(),
+                content.getX(), content.getY(), content.getZ(), config.inspectDialogLimit())
+                .whenComplete((history, error) -> {
+                    if (error != null) {
+                        player.sendMessage(Messages.error("Lookup failed, check the console."));
+                        plugin.getLogger().log(Level.SEVERE, "Inspect failed", error);
+                        return;
+                    }
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        if (player.isOnline()) {
+                            LogDialogs.history(plugin, player, world, block.getX(), block.getY(), block.getZ(),
+                                    history, config.inspectDialogLimit(), () -> inspectDialog(player, block, content));
+                        }
+                    });
+                });
     }
 
     private void inspectContainer(Player player, Block block) {

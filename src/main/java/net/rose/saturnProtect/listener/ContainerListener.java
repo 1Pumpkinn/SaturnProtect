@@ -45,7 +45,7 @@ public final class ContainerListener implements Listener {
         }
     }
 
-    private record Snapshot(Block block, Inventory inventory, Map<String, Tally> contents) {
+    private record Snapshot(Block block, Inventory inventory, String container, Map<String, Tally> contents) {
     }
 
     private final ProtectConfig config;
@@ -65,23 +65,21 @@ public final class ContainerListener implements Listener {
         }
         Inventory inventory = event.getInventory();
         Block block = ContainerUtil.locate(inventory);
-        String name = null;
-        if (block != null) {
-            name = BlockText.pretty(block.getType().getKey().getKey());
-        } else {
-            Entity entity = ContainerUtil.locateEntity(inventory);
-            if (entity != null) {
-                block = entity.getLocation().getBlock();
-                name = BlockText.pretty(entity.getType().getKey().getKey());
-            }
-        }
         if (block == null) {
+            Entity entity = ContainerUtil.locateEntity(inventory);
+            if (entity == null) {
+                return;
+            }
+            block = entity.getLocation().getBlock();
+        }
+        String container = ContainerUtil.key(inventory);
+        if (container == null) {
             return;
         }
 
-        open.put(player.getUniqueId(), new Snapshot(block, inventory, tally(inventory.getContents())));
+        open.put(player.getUniqueId(), new Snapshot(block, inventory, container, tally(inventory.getContents())));
         if (config.logContainerOpens()) {
-            logService.logPlayerEvent(player, block, EventAction.CONTAINER_OPEN, name, null);
+            logService.logPlayerEvent(player, block, EventAction.CONTAINER_OPEN, BlockText.pretty(container), null);
         }
     }
 
@@ -122,7 +120,7 @@ public final class ContainerListener implements Listener {
             Tally reference = after.containsKey(key) ? after.get(key) : before.get(key);
             logService.logItem(player, snapshot.block(),
                     delta > 0 ? ItemAction.CONTAINER_ADD : ItemAction.CONTAINER_REMOVE,
-                    reference.type, Math.abs(delta), reference.data);
+                    reference.type, Math.abs(delta), reference.data, snapshot.container());
         }
     }
 

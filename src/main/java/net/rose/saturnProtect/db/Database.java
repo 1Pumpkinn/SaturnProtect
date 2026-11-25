@@ -9,6 +9,7 @@ import net.rose.saturnProtect.model.EventRecord;
 import net.rose.saturnProtect.model.ItemAction;
 import net.rose.saturnProtect.model.ItemLookupResult;
 import net.rose.saturnProtect.model.ItemRecord;
+import net.rose.saturnProtect.model.PositionHistory;
 import net.rose.saturnProtect.model.LogAction;
 import net.rose.saturnProtect.model.LookupEntry;
 import net.rose.saturnProtect.model.LookupQuery;
@@ -50,18 +51,18 @@ public final class Database {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""";
 
     private static final String INSERT_ITEM = """
-            INSERT INTO sp_item (time, actor, actor_uuid, world, x, y, z, action, item_type, amount, item_data)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+            INSERT INTO sp_item (time, actor, actor_uuid, world, x, y, z, action, item_type, amount, item_data, container)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private static final String INSERT_EVENT = """
             INSERT INTO sp_event (time, actor, actor_uuid, world, x, y, z, action, subject, detail)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
     private static final String SELECT_ITEM_COLUMNS =
-            "SELECT id, time, actor, actor_uuid, world, x, y, z, action, item_type, amount, rolled_back FROM sp_item";
+            "SELECT id, time, actor, actor_uuid, world, x, y, z, action, item_type, amount, container, rolled_back FROM sp_item";
 
     private static final String SELECT_ITEM_ROLLBACK_COLUMNS =
-            "SELECT id, time, actor, actor_uuid, world, x, y, z, action, item_type, amount, rolled_back, item_data FROM sp_item";
+            "SELECT id, time, actor, actor_uuid, world, x, y, z, action, item_type, amount, container, rolled_back, item_data FROM sp_item";
 
     private static final String SELECT_EVENT_COLUMNS =
             "SELECT id, time, actor, actor_uuid, world, x, y, z, action, subject, detail FROM sp_event";
@@ -155,6 +156,7 @@ public final class Database {
                         detail TEXT
                     )""");
             addColumnIfMissing(statement, "sp_item", "rolled_back", "INTEGER NOT NULL DEFAULT 0");
+            addColumnIfMissing(statement, "sp_item", "container", "TEXT");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_sp_event_pos ON sp_event (world, x, y, z, time)");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_sp_event_time ON sp_event (time)");
             statement.execute("CREATE INDEX IF NOT EXISTS idx_sp_event_actor ON sp_event (actor, time)");
@@ -355,6 +357,69 @@ public final class Database {
                 throw new CompletionException(ex);
             }
         }, worker);
+    }
+
+    /**
+     * Everything logged at a spot. Block changes are read at the block itself; container moves and spot bound
+     * events at {@code content}, which differs for a double chest where both halves share the left half's
+     * history. Drops, pickups, chat, kills and sessions are left out, they are logged where the player stands,
+     * not where something happened to a block.
+     */
+    public CompletableFuture<PositionHistory> positionHistory(String world, int bx, int by, int bz,
+                                                              int cx, int cy, int cz, int limit) {
+        return CompletableFuture.supplyAsync(() -> {
+            flushPending();
+            String where = " WHERE world = ? AND x = ? AND y = ? AND z = ?";
+            String order = " ORDER BY time DESC, id DESC LIMIT ?";
+            String itemActions = " AND action IN (" + ItemAction.CONTAINER_ADD.id() + ", "
+                    + ItemAction.CONTAINER_REMOVE.id() + ")";
+            String eventActions = " AND action IN (" + EventAction.SIGN.id() + ", " + EventAction.ENTITY_PLACE.id()
+                    + ", " + EventAction.ENTITY_BREAK.id() + ", " + EventAction.ENTITY_ITEM.id() + ", "
+                    + EventAction.CONTAINER_OPEN.id() + ")";
+            try {
+                List<BlockRecord> blocks = new ArrayList<>();
+                try (PreparedStatement statement = connection.prepareStatement(SELECT_BLOCK_COLUMNS + where + order)) {
+                    bindSpot(statement, world, bx, by, bz, limit);
+                    try (ResultSet rs = statement.executeQuery()) {
+                        while (rs.next()) {
+                            blocks.add(mapBlock(rs));
+                        }
+                    }
+                }
+                List<ItemRecord> items = new ArrayList<>();
+                try (PreparedStatement statement = connection.prepareStatement(
+                        SELECT_ITEM_COLUMNS + where + itemActions + order)) {
+                    bindSpot(statement, world, cx, cy, cz, limit);
+                    try (ResultSet rs = statement.executeQuery()) {
+                        while (rs.next()) {
+                            items.add(mapItem(rs, false));
+                        }
+                    }
+                }
+                List<EventRecord> events = new ArrayList<>();
+                try (PreparedStatement statement = connection.prepareStatement(
+                        SELECT_EVENT_COLUMNS + where + eventActions + order)) {
+                    bindSpot(statement, world, cx, cy, cz, limit);
+                    try (ResultSet rs = statement.executeQuery()) {
+                        while (rs.next()) {
+                            events.add(mapEvent(rs));
+                        }
+                    }
+                }
+                return new PositionHistory(blocks, items, events);
+            } catch (SQLException ex) {
+                throw new CompletionException(ex);
+            }
+        }, worker);
+    }
+
+    private static void bindSpot(PreparedStatement statement, String world, int x, int y, int z, int limit)
+            throws SQLException {
+        statement.setString(1, world);
+        statement.setInt(2, x);
+        statement.setInt(3, y);
+        statement.setInt(4, z);
+        statement.setInt(5, limit);
     }
 
     /**
@@ -779,6 +844,7 @@ public final class Database {
                     statement.setString(9, entry.itemType());
                     statement.setInt(10, entry.amount());
                     statement.setBytes(11, entry.itemData());
+                    statement.setString(12, entry.container());
                     statement.addBatch();
                     if (++inBatch >= config.batchSize()) {
                         statement.executeBatch();
@@ -1080,6 +1146,7 @@ public final class Database {
                 rs.getString("item_type"),
                 rs.getInt("amount"),
                 withData ? rs.getBytes("item_data") : null,
+                rs.getString("container"),
                 rs.getInt("rolled_back") != 0
         );
     }

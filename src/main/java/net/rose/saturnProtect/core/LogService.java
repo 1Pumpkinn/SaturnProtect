@@ -41,23 +41,25 @@ public final class LogService {
                 block.getX(), block.getY(), block.getZ(), action, oldData, newData));
     }
 
-    public void logItem(Player player, Block block, ItemAction action, String itemType, int amount, byte[] itemData) {
+    /** @param container key of the container the item moved in or out of, null for drops and pickups */
+    public void logItem(Player player, Block block, ItemAction action, String itemType, int amount, byte[] itemData,
+                        String container) {
         String world = block.getWorld().getName();
         if (config.isWorldIgnored(world) || config.isUserIgnored(player.getName()) || amount <= 0) {
             return;
         }
         database.queue(ItemRecord.create(player.getName(), player.getUniqueId(), world,
-                block.getX(), block.getY(), block.getZ(), action, itemType, amount, itemData));
+                block.getX(), block.getY(), block.getZ(), action, itemType, amount, itemData, container));
     }
 
     public void logItem(String actor, UUID actorUuid, Block block, ItemAction action, String itemType,
-                        int amount, byte[] itemData) {
+                        int amount, byte[] itemData, String container) {
         String world = block.getWorld().getName();
         if (config.isWorldIgnored(world) || config.isUserIgnored(actor) || amount <= 0) {
             return;
         }
         database.queue(ItemRecord.create(actor, actorUuid, world,
-                block.getX(), block.getY(), block.getZ(), action, itemType, amount, itemData));
+                block.getX(), block.getY(), block.getZ(), action, itemType, amount, itemData, container));
     }
 
     /**
@@ -81,7 +83,7 @@ public final class LogService {
         if (stack.getType().isAir()) {
             return;
         }
-        logItem(player, block, action, stack.getType().getKey().toString(), amount, stack.asOne().serializeAsBytes());
+        logItem(player, block, action, stack.getType().getKey().toString(), amount, stack.asOne().serializeAsBytes(), null);
     }
 
     public void logEvent(String actor, UUID actorUuid, String world, int x, int y, int z,
@@ -104,7 +106,7 @@ public final class LogService {
                 block.getX(), block.getY(), block.getZ(), action, subject, detail);
     }
 
-    /** Logs everything in a container as removed, used when the container block is broken. */
+    /** Logs everything in a container as removed, used when the container block is broken. The block is the container. */
     public void logContents(Player player, Block block, ItemStack[] contents) {
         logContents(player.getName(), player.getUniqueId(), block, contents);
     }
@@ -124,7 +126,7 @@ public final class LogService {
         for (Map.Entry<String, Integer> entry : counts.entrySet()) {
             ItemStack sample = samples.get(entry.getKey());
             logItem(actor, actorUuid, block, ItemAction.CONTAINER_REMOVE, sample.getType().getKey().toString(),
-                    entry.getValue(), sample.serializeAsBytes());
+                    entry.getValue(), sample.serializeAsBytes(), ContainerUtil.key(block));
         }
     }
 

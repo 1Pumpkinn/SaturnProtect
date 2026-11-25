@@ -100,7 +100,8 @@ public final class SaturnProtectApiImpl implements SaturnProtectAPI {
         ItemStack one = item.asOne();
         logService.logItem(actor, actorUuid, container,
                 added ? ItemAction.CONTAINER_ADD : ItemAction.CONTAINER_REMOVE,
-                one.getType().getKey().toString(), item.getAmount(), one.serializeAsBytes());
+                one.getType().getKey().toString(), item.getAmount(), one.serializeAsBytes(),
+                ContainerUtil.key(container));
     }
 
     @Override

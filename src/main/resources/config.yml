@@ -13,11 +13,16 @@ writer:
 inspector:
   # Max history lines shown when inspecting a block
   max-results: 10
+  # Max entries in the inspector dialog (see ui.dialog-inspect), which scrolls
+  dialog-max-results: 40
 
 ui:
   # Show /sp lookup, items and events results to players as a pop-up dialog (with Prev/Next buttons and an
   # "In chat" button). Dialogs block movement while open, so set this to false to always use chat lines.
   dialog-logs: true
+  # Show the inspector as a dialog with everything that happened at the clicked spot: placed, broken, opened,
+  # items put in and taken out, sign edits... false keeps the short chat lines.
+  dialog-inspect: true
 
 lookup:
   # Lines per page (a dialog scrolls, so keep this at 10 or less if players use dialogs)

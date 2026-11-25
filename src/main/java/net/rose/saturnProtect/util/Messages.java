@@ -148,7 +148,7 @@ public final class Messages {
                 .append(Component.text("- ", NamedTextColor.DARK_GRAY))
                 .append(Component.text(record.actor(), NamedTextColor.WHITE))
                 .append(Component.text(" " + record.action().verb() + " " + record.amount() + "x "
-                        + BlockText.name(record.itemType()), NamedTextColor.GRAY));
+                        + BlockText.name(record.itemType()) + containerSuffix(record), NamedTextColor.GRAY));
         if (showCoords) {
             line = line.append(Component.text(" (" + record.x() + "/" + record.y() + "/" + record.z() + ")", NamedTextColor.DARK_AQUA));
         }
@@ -158,6 +158,15 @@ public final class Messages {
             line = line.decorate(TextDecoration.STRIKETHROUGH);
         }
         return line;
+    }
+
+    /** {@code " to a chest"} / {@code " from a barrel"} for container moves, nothing for drops and pickups. */
+    public static String containerSuffix(ItemRecord record) {
+        return switch (record.action()) {
+            case CONTAINER_ADD -> " to " + BlockText.containerPhrase(record.container());
+            case CONTAINER_REMOVE -> " from " + BlockText.containerPhrase(record.container());
+            case DROP, PICKUP -> "";
+        };
     }
 
     private static Component lookupLine(long now, BlockRecord record) {

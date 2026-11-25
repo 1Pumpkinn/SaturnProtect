@@ -60,6 +60,16 @@ public final class ProtectConfig {
         return Math.max(1, config.getInt("inspector.max-results", 10));
     }
 
+    /** Most entries the inspector dialog shows for one spot. A dialog scrolls, so this can be higher than chat. */
+    public int inspectDialogLimit() {
+        return Math.max(1, config.getInt("inspector.dialog-max-results", 40));
+    }
+
+    /** Show the inspector's result as a dialog with the full history of the spot instead of chat lines. */
+    public boolean dialogInspect() {
+        return config.getBoolean("ui.dialog-inspect", true);
+    }
+
     public int pageSize() {
         return Math.max(1, config.getInt("lookup.page-size", 10));
     }

@@ -24,15 +24,16 @@ import java.util.TreeSet;
 
 /**
  * Tab completion for the {@code key:value} parameters of {@code /sp lookup}, {@code items}, {@code events},
- * {@code rollback}, {@code restore} and {@code purge}. Those commands take one greedy string, so Brigadier
- * can't complete it on its own: this works out which space separated token the cursor is in and completes only
- * that token.
+ * {@code rollback}, {@code restore}, {@code purge} and the one-word searches. Those commands take one greedy
+ * string, so Brigadier can't complete it on its own: this works out which space separated token the cursor is
+ * in and completes only that token.
  * <p>
- * Plain values go by position, {@code /sp lookup <player> <time> <radius>}, so tab on an empty token offers
- * players, then time presets, then radii. After those, tab offers the keys that are still free ({@code a:},
- * {@code b:}, {@code e:}, ...), and after a key it offers that key's values: actions, blocks and so on. Keys
- * still work anywhere ({@code u:Steve t:2d}). Comma lists ({@code Steve,Al<tab>}) complete the segment after
- * the last comma and skip values already in the list.
+ * Plain words are sorted by what they look like (see {@link QueryParser}), so tab on an empty token offers
+ * whichever of player, time and radius has not been given yet, in that order. Typing the start of an action
+ * word completes it too ({@code cont<tab>} gives {@code container}). Once those are filled, tab offers the keys
+ * that are still free ({@code a:}, {@code b:}, {@code e:}, ...), and after a key it offers that key's values:
+ * actions, blocks and so on. Keys still work anywhere ({@code u:Steve t:2d}). Comma lists
+ * ({@code Steve,Al<tab>}) complete the segment after the last comma and skip values already in the list.
  */
 public final class ParamSuggester {
 
@@ -63,13 +64,16 @@ public final class ParamSuggester {
     }
 
     public static SuggestionProvider<CommandSourceStack> provider(ProtectConfig config, Kind kind) {
-        return (context, builder) -> suggest(config, kind, builder).buildFuture();
+        return (context, builder) -> suggest(config, kind, false, builder).buildFuture();
     }
 
-    // ------------------------------------------------------------------ token handling
+    /** For the one-word searches ({@code /sp containers}): the action is fixed, so {@code a:} is not offered. */
+    public static SuggestionProvider<CommandSourceStack> quickProvider(ProtectConfig config, Kind kind) {
+        return (context, builder) -> suggest(config, kind, true, builder).buildFuture();
+    }
 
     /** @return the builder holding the suggestions: an offset copy, so it is that one that must be built */
-    private static SuggestionsBuilder suggest(ProtectConfig config, Kind kind, SuggestionsBuilder builder) {
+    private static SuggestionsBuilder suggest(ProtectConfig config, Kind kind, boolean quick, SuggestionsBuilder builder) {
         String remaining = builder.getRemaining();
         int space = remaining.lastIndexOf(' ');
         String finished = remaining.substring(0, space + 1);
@@ -79,7 +83,7 @@ public final class ParamSuggester {
 
         int colon = token.indexOf(':');
         if (colon < 0) {
-            suggestPlain(config, kind, finished, token, out);
+            suggestPlain(config, kind, quick, finished, token, out);
         } else {
             suggestValues(config, kind, token, colon, out);
         }
@@ -87,13 +91,12 @@ public final class ParamSuggester {
     }
 
     /**
-     * A token without a colon: the next positional value ({@code <player>}, then {@code <time>}, then
-     * {@code <radius>}), or once those three are filled, the keys that are still free.
+     * A token without a colon: the next of {@code <player>}, {@code <time>} and {@code <radius>} that is not given
+     * yet, or once those are filled, the keys that are still free.
      */
-    private static void suggestPlain(ProtectConfig config, Kind kind, String finished, String token,
+    private static void suggestPlain(ProtectConfig config, Kind kind, boolean quick, String finished, String token,
                                      SuggestionsBuilder out) {
         Set<String> used = new HashSet<>();
-        int positional = 0;
         for (String done : finished.trim().split("\\s+")) {
             if (done.isEmpty()) {
                 continue;
@@ -102,21 +105,37 @@ public final class ParamSuggester {
             String lower = done.toLowerCase(Locale.ROOT);
             if (colon > 0) {
                 used.add(canonicalKey(done.substring(0, colon)));
-            } else if (kind == Kind.PURGE && (lower.equals("vacuum") || lower.equals("confirm"))) {
-                used.add(lower);
+            } else if (kind == Kind.PURGE) {
+                used.add(lower.equals("vacuum") || lower.equals("confirm") ? lower : "t");
             } else {
-                positional++;
+                switch (QueryParser.classify(done)) {
+                    case TIME -> used.add("t");
+                    case RADIUS -> used.add("r");
+                    case USER -> used.add("u");
+                    default -> {
+                    }
+                }
             }
         }
 
         String lower = token.toLowerCase(Locale.ROOT);
-        String slot = positionalKey(kind, positional, used);
+        String slot = nextSlot(kind, used);
         if (slot != null) {
             suggestForKey(config, kind, slot, "", token, out);
         } else {
             for (String key : keysFor(kind)) {
+                if (quick && key.equals("a")) {
+                    continue;
+                }
                 if (!used.contains(key) && !POSITIONAL.contains(key) && key.startsWith(lower)) {
                     out.suggest(key.length() > 1 ? key : key + ":");
+                }
+            }
+        }
+        if (!quick && !lower.isEmpty() && kind != Kind.PURGE) {
+            for (String action : actions(kind)) {
+                if (action.startsWith(lower) && !action.equals(lower) && QueryParser.isActionWord(action)) {
+                    out.suggest(action);
                 }
             }
         }
@@ -129,16 +148,17 @@ public final class ParamSuggester {
         }
     }
 
-    /** Which key the n-th plain value stands for. */
-    private static String positionalKey(Kind kind, int index, Set<String> used) {
+    /** The first of player, time and radius that is not given yet, or null once all three are. */
+    private static String nextSlot(Kind kind, Set<String> used) {
         if (kind == Kind.PURGE) {
-            return index == 0 && !used.contains("t") ? "t" : null;
+            return used.contains("t") ? null : "t";
         }
-        // slots already filled with a key (u:Steve) are passed over, like the parser does
-        while (index < POSITIONAL.size() && used.contains(POSITIONAL.get(index))) {
-            index++;
+        for (String key : POSITIONAL) {
+            if (!used.contains(key)) {
+                return key;
+            }
         }
-        return index < POSITIONAL.size() ? POSITIONAL.get(index) : null;
+        return null;
     }
 
     private static List<String> keysFor(Kind kind) {
@@ -206,8 +226,6 @@ public final class ParamSuggester {
             default -> key.toLowerCase(Locale.ROOT);
         };
     }
-
-    // ------------------------------------------------------------------ value sources
 
     /** Online players first, then everyone who has played before once at least one letter is typed. */
     private static List<String> players(String segment) {

@@ -20,10 +20,12 @@ import org.bukkit.entity.Player;
 import java.util.List;
 
 /**
- * The one search command. What gets searched follows from the actions given: {@code a:break|place|kill} for
- * blocks, {@code a:add|remove|drop|pickup} (or {@code a:container}) for items, and {@code a:open|login|logout|
- * chat|command|sign|entity-*} for events. With no action it searches blocks. Without any arguments a player
- * gets the search form. {@code /sp items} and {@code /sp events} still work but are hidden from help.
+ * The one search command. What gets searched follows from the actions given: {@code break|place|kill} for
+ * blocks, {@code add|remove|drop|pickup} (or {@code container}) for items, and {@code open|login|logout|
+ * chat|command|sign|entity-*} for events. Actions can be written bare ({@code /sp l Steve 2h container}) or as
+ * {@code a:container}. With no action it searches blocks. Without any arguments a player gets the search form.
+ * {@code /sp items} and {@code /sp events} still work but are hidden from help, and {@link QuickLookupCommand}
+ * has one-word versions of the common searches ({@code /sp show containers}, {@code /sp show chat}...).
  */
 public final class LookupCommand implements SubCommand {
 
@@ -44,12 +46,12 @@ public final class LookupCommand implements SubCommand {
 
     @Override
     public String usage() {
-        return "lookup | l [<player> <time> <radius>] [a:action b:block e:exclude]";
+        return "lookup | l [player] [time] [radius] [action] [b:block e:exclude]";
     }
 
     @Override
     public String description() {
-        return "Search blocks, containers, chat, sessions... Actions: break place kill add remove open login chat. No arguments opens a form";
+        return "Search anything, in any order: /sp l Steve 2h 10 container. Actions: break place kill container drop open login chat command sign. No arguments opens a form";
     }
 
     @Override
@@ -79,6 +81,11 @@ public final class LookupCommand implements SubCommand {
             Dialogs.openSearch(plugin, player);
             return Command.SINGLE_SUCCESS;
         }
+        return search(sender, params, config, lookups);
+    }
+
+    /** Parses {@code params}, works out which log they ask for and shows the first page. */
+    static int search(CommandSender sender, String params, ProtectConfig config, LookupService lookups) {
         try {
             LookupQuery query = QueryParser.parse(sender, params, config);
             switch (route(query)) {

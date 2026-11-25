@@ -28,6 +28,15 @@ public final class BlockText {
         return out.toString();
     }
 
+    /**
+     * A container key as a phrase: {@code double_chest} -> {@code a double chest}, {@code ender_chest} ->
+     * {@code an ender chest}. Null (rows logged before containers were named) gives {@code a container}.
+     */
+    public static String containerPhrase(String key) {
+        String name = key == null || key.isBlank() ? "container" : name(key).replace('_', ' ');
+        return ("aeiou".indexOf(name.charAt(0)) >= 0 ? "an " : "a ") + name;
+    }
+
     public static boolean isAir(String name) {
         return name.equals("air") || name.equals("cave_air") || name.equals("void_air");
     }

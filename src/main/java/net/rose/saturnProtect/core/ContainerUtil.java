@@ -40,4 +40,26 @@ public final class ContainerUtil {
         }
         return null;
     }
+
+    /**
+     * The key of the container an inventory belongs to: {@code chest}, {@code double_chest}, {@code barrel},
+     * {@code chest_minecart}... Null if it is not a container this plugin tracks.
+     */
+    public static String key(Inventory inventory) {
+        InventoryHolder holder = inventory.getHolder(false);
+        if (holder instanceof DoubleChest) {
+            return "double_chest";
+        }
+        Block block = locate(inventory);
+        if (block != null) {
+            return key(block);
+        }
+        Entity entity = locateEntity(inventory);
+        return entity == null ? null : entity.getType().getKey().getKey();
+    }
+
+    /** The key of the container a block is, e.g. {@code barrel}. */
+    public static String key(Block block) {
+        return block.getType().getKey().getKey();
+    }
 }
